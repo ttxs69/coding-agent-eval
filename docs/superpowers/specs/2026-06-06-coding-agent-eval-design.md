@@ -95,6 +95,9 @@ class AgentAdapter(Protocol):
     name: str                                  # "claude-code", "codex", "aider"
     default_model: str | None                  # e.g. "claude-opus-4-7" or None
 
+    def is_available(self) -> bool:
+        """Returns True if the underlying CLI is installed and runnable."""
+
     def build_command(self, workdir: Path, prompt: str, *, model: str | None) -> list[str]:
         """Returns the argv to run."""
 
