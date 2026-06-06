@@ -115,6 +115,10 @@ class AgentResult:
 
 The harness captures the patch uniformly via `git diff` on the workdir — we do not trust any agent's own diff output. The adapter's only job for patches is to set the working directory and let the agent run.
 
+`pae list-agents` calls `is_available()` on every registered adapter and prints a table of which ones are usable in the current environment. Pre-run, the harness re-checks `is_available()` for each requested agent and fails fast with a clear error if any are missing — no mid-run "command not found" surprises.
+
+A `MockAdapter` ships as a first-class adapter (registered alongside Claude Code / Codex / Aider) for use in tests and smoke runs. It writes a pre-canned patch from the test fixture to the workdir, so the full harness can be exercised without API keys. It is clearly marked as a test-only adapter in `pae list-agents`.
+
 ## Run Lifecycle
 
 ```
@@ -215,6 +219,10 @@ Plain HTML + ~50 lines of vanilla JS for sorting. No React, no bundler, no build
 ### Hosting
 
 User pushes `site/` to `gh-pages` branch, or `pae build-site --publish` shells out to the `gh` CLI. We do not bundle our own deployer.
+
+### Console reporting (local dev)
+
+The static site is the canonical published view, but for local development `pae report --format table` prints a sortable console table of all `results/*.json` files in the current directory, reusing the same aggregation logic as `pae build-site`. This is the same data the site shows, just printed to stdout — no separate code path. Useful when iterating on a task or comparing two agents in the terminal without leaving to look at a browser.
 
 ## Reproducibility
 
