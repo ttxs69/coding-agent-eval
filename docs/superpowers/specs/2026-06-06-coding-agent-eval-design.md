@@ -210,7 +210,7 @@ Broken tasks and agent crashes must not silently count as "failed" alongside leg
 
 ### Tech
 
-Plain HTML + ~50 lines of vanilla JS for sorting. No React, no bundler, no build step beyond `pae build-site`. CSS is hand-rolled, ~100 lines, dark-mode via `prefers-color-scheme`. Total `site/` weight: a few hundred KB even with hundreds of tasks.
+Plain HTML + ~50 lines of vanilla JS for sorting. No React, no bundler, no build step beyond `pae build-site`. CSS is hand-rolled, ~100 lines, dark-mode via `prefers-color-scheme`. Diff highlighting uses [highlight.js](https://highlightjs.org/) (single ~50KB file, no JS framework) loaded from a local copy in `site/vendor/`. Total `site/` weight: a few hundred KB even with hundreds of tasks.
 
 ### Hosting
 
@@ -234,7 +234,7 @@ The harness itself must be tested, not just trusted. Three layers:
 2. **Integration tests** for the run loop, using a **mock agent** that just writes a known patch to the workdir. This exercises the full local flow (clone, setup, agent, grade) end-to-end against a tiny fixture task (single Python file, single test). Integration tests use a small local fixture repo committed to the repo, not network.
 3. **Live smoke test** (manual, not in CI): one real task, one real agent, on a developer machine. Catches environment issues that mocks can't. Documented in `docs/smoke-test.md`.
 
-A test task fixture is checked in at `tests/fixtures/tiny_task/` with a known-bug-and-known-fix so the integration test has a deterministic expected outcome.
+A test task fixture is checked in at `pae/tests/fixtures/tiny_task/` (under the package, not at the project root, to avoid confusion with the user-facing `tasks/` directory) with a known-bug-and-known-fix so the integration test has a deterministic expected outcome.
 
 ## Open Questions (Resolved During Brainstorming)
 
