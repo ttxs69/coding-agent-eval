@@ -261,11 +261,13 @@ def run(
     agent_rc, agent_stdout, agent_stderr, duration = run_step(cmd, workdir, timeout=timeout_sec)
     if agent_rc == -1:
         return _result(task, agent_name, mode, Status.TIMEOUT, agent_version, pre_flight, pre_flight, "",
-                       str(workdir), f"agent timed out after {timeout_sec}s")
+                       str(workdir), f"agent timed out after {timeout_sec}s",
+                       agent_model=adapter._discover_model())
     parsed = adapter.parse_output(agent_stdout, agent_stderr, agent_rc)
     if parsed.exit_code != 0:
         return _result(task, agent_name, mode, Status.AGENT_ERROR, agent_version, pre_flight, pre_flight, "",
-                       str(workdir), f"agent exited non-zero: {parsed.exit_code}")
+                       str(workdir), f"agent exited non-zero: {parsed.exit_code}",
+                       agent_model=parsed.usage.model or adapter._discover_model())
 
     # 8: Capture patch
     diff_proc = subprocess.run(["git", "diff"], cwd=workdir, capture_output=True, text=True)

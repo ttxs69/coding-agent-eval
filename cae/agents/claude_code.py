@@ -18,12 +18,15 @@ from cae.agents.base import AgentResult, UsageInfo
 
 # Claude Code emits terminal styling codes in its JSON modelUsage keys.
 # The codes may be full ANSI (\x1b[1m) or just the bracket portion ([1m]).
-# Strip both forms before recording the model name.
+# Strip both forms, then reject anything with leftover bracket chars.
 _ANSI_RE = re.compile(r"(?:\x1b)?\[[0-9;]*[a-zA-Z]")
 
 
-def _strip_ansi(s: str) -> str:
-    return _ANSI_RE.sub("", s).strip()
+def _clean_model_name(s: str) -> str | None:
+    cleaned = _ANSI_RE.sub("", s).strip()
+    if not cleaned or any(c in cleaned for c in "[]\x1b"):
+        return None
+    return cleaned
 
 
 class ClaudeCodeAdapter:
@@ -108,7 +111,7 @@ class ClaudeCodeAdapter:
                 if model_usage and not model:
                     raw_name = next(iter(model_usage.keys()), None)
                     if raw_name is not None:
-                        model = _strip_ansi(raw_name)
+                        model = _clean_model_name(raw_name)
                 # Tokens live at envelope.usage.{input,output}_tokens, but
                 # cache_read_input_tokens also contributes to cost.
                 usage = envelope.get("usage") or {}
