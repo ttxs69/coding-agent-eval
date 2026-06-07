@@ -22,6 +22,9 @@ class Status(StrEnum):
 class TestStatus(StrEnum):
     """Per-test status (the spec's 5-value enum)."""
 
+    # Tell pytest not to treat this as a test class (it starts with "Test").
+    __test__ = False
+
     PASSED = "passed"
     FAILED = "failed"
     ERROR = "error"
