@@ -30,3 +30,8 @@ addopts = "-ra"
 [tool.ruff]
 line-length = 100
 target-version = "py311"
+
+[tool.pyright]
+include = ["pae", "tests"]
+pythonVersion = "3.11"
+reportMissingImports = "none"
