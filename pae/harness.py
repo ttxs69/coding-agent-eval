@@ -1,0 +1,234 @@
+"""Run loop: orchestrate one (task, agent) pair through the 11-step lifecycle.
+
+This module implements local mode only in v1. Docker mode (pae/docker_run.py)
+is added in Phase 5 (Task 22). Steps 1-11 follow the spec section "Run Lifecycle".
+"""
+
+from __future__ import annotations
+
+import json
+import shutil
+import subprocess
+import tempfile
+import time
+from datetime import datetime, timezone
+from pathlib import Path
+
+from pae.agents import get_adapter
+from pae.agents.base import Status, TestStatus
+from pae.grader import grade
+from pae.parsers import parse_pytest_output
+
+
+def _utc_now_iso() -> str:
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _run_id_for_now() -> str:
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H-%M-%S")
+
+
+def _run_subprocess(cmd: str | list[str], cwd: Path, timeout: int) -> tuple[int, str, str, float]:
+    """Run a shell command, return (exit_code, stdout, stderr, duration_sec)."""
+    start = time.monotonic()
+    try:
+        proc = subprocess.run(
+            cmd if isinstance(cmd, list) else cmd,
+            shell=isinstance(cmd, str),
+            cwd=cwd,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+        )
+        elapsed = time.monotonic() - start
+        return proc.returncode, proc.stdout, proc.stderr, elapsed
+    except subprocess.TimeoutExpired:
+        elapsed = time.monotonic() - start
+        return -1, "", f"timeout after {timeout}s", elapsed
+
+
+def _ensure_git_repo(workdir: Path) -> None:
+    """Initialize a git repo in workdir if one doesn't exist, and commit all files."""
+    if (workdir / ".git").exists():
+        return
+    subprocess.run(["git", "init", "-q"], cwd=workdir, check=True)
+    subprocess.run(["git", "config", "user.email", "pae@local"], cwd=workdir, check=True)
+    subprocess.run(["git", "config", "user.name", "pae"], cwd=workdir, check=True)
+    subprocess.run(["git", "add", "."], cwd=workdir, check=True)
+    subprocess.run(["git", "commit", "-q", "-m", "initial"], cwd=workdir, check=True)
+
+
+def _apply_test_patch(workdir: Path, task_dir: Path) -> None:
+    """Apply tests.patch if it exists. No-op for hand-authored tasks."""
+    patch = task_dir / "tests.patch"
+    if not patch.exists():
+        return
+    subprocess.run(["git", "apply", str(patch)], cwd=workdir, check=True)
+
+
+def _run_tests(cmd: str, workdir: Path, timeout: int, run_subprocess=_run_subprocess) -> dict[str, TestStatus]:
+    """Run a test command and parse its output via the pytest parser.
+
+    `run_subprocess` is the (cmd, cwd, timeout) -> (rc, stdout, stderr, dur) callable.
+    Defaults to the local-mode `_run_subprocess`; Task 22 swaps in a docker dispatcher.
+
+    Returns {nodeid: TestStatus}.
+    """
+    exit_code, stdout, stderr, _ = run_subprocess(cmd, workdir, timeout=timeout)
+    if exit_code not in (0, 1, 2, 3, 4, 5):  # pytest uses 0-5
+        return {}
+    return parse_pytest_output(stdout + "\n" + stderr)
+
+
+def run(
+    task_path: Path,
+    agent_name: str,
+    workdir: Path | None = None,
+    timeout_sec: int = 1800,
+    fetch_fresh: bool = False,
+    keep_workdir: bool = False,
+    docker: bool = False,
+    docker_image: str = "python:3.11-slim",
+    env_file: Path | None = None,
+    repeat: int = 1,
+    repeat_index: int | None = None,
+) -> dict:
+    """Run a single (task, agent) pair through the full harness. Return the result dict.
+
+    Args:
+        task_path: path to a directory containing task.json (and optional tests.patch, repo/).
+        agent_name: name of a registered adapter (e.g. "mock", "claude-code").
+        workdir: optional pre-populated workdir. If None, harness copies from task_path/repo/.
+        timeout_sec: per-stage timeout (setup, pre-flight, agent, grading).
+        repeat: total number of times this run is being repeated (1 = no repeat).
+        repeat_index: 1-based index of this specific run within a repeated batch.
+            When `repeat=1`, this is None and the run_id omits the suffix.
+
+    Returns a dict matching the spec's Output JSON shape.
+    """
+    task_dir = Path(task_path)
+    task = json.loads((task_dir / "task.json").read_text())
+    fail_to_pass = task["fail_to_pass"]
+    pass_to_pass = task["pass_to_pass"]
+
+    # 1-3: Resolve task, create workdir, fetch repo
+    workdir_owned = workdir is None
+    if workdir is None:
+        workdir = Path(tempfile.mkdtemp(prefix="pae-"))
+    workdir = Path(workdir)
+    workdir.mkdir(parents=True, exist_ok=True)
+
+    if workdir_owned:
+        repo_src = task_dir / "repo"
+        if repo_src.exists():
+            for child in repo_src.iterdir():
+                dest = workdir / child.name
+                if child.is_dir():
+                    shutil.copytree(child, dest)
+                else:
+                    shutil.copy2(child, dest)
+
+    _ensure_git_repo(workdir)
+    _apply_test_patch(workdir, task_dir)
+
+    # Pick a subprocess runner: local (default) or docker (Task 22).
+    def run_step(cmd, cwd, timeout):
+        if docker:
+            from pae.docker_run import exec_in
+            return exec_in(
+                docker_image,
+                cmd if isinstance(cmd, list) else cmd.split(),
+                workdir=cwd,
+                timeout=timeout,
+                env_file=env_file,
+            )
+        return _run_subprocess(cmd, cwd, timeout=timeout)
+
+    # 5: Setup
+    if task.get("setup_cmd"):
+        setup_rc, _, setup_err, _ = run_step(task["setup_cmd"], workdir, timeout=timeout_sec)
+        if setup_rc != 0:
+            return _result(task, agent_name, "local", Status.TASK_ERROR, "unknown", {}, {}, "", str(workdir),
+                           f"setup_cmd failed: {setup_err[:200]}")
+
+    # 6: Pre-flight
+    pre = _run_tests(task["test_cmd"], workdir, timeout=timeout_sec, run_subprocess=run_step)
+    pre_flight = {"fail_to_pass": {n: pre.get(n, TestStatus.ERROR).value for n in fail_to_pass},
+                  "pass_to_pass": {n: pre.get(n, TestStatus.ERROR).value for n in pass_to_pass}}
+    # validate: fail_to_pass tests should currently fail, pass_to_pass should currently pass
+    pre_fails_correctly = all(pre_flight["fail_to_pass"][n] != "passed" for n in fail_to_pass)
+    pre_passes_correctly = all(pre_flight["pass_to_pass"][n] == "passed" for n in pass_to_pass)
+    if not (pre_fails_correctly and pre_passes_correctly):
+        return _result(task, agent_name, "local", Status.TASK_ERROR, "unknown", pre_flight, pre_flight, "",
+                       str(workdir), "pre-flight validation failed: fail_to_pass tests do not all fail, "
+                       "or pass_to_pass tests do not all pass")
+
+    # 7: Run agent
+    adapter = get_adapter(agent_name)
+    if not adapter.is_available():
+        return _result(task, agent_name, "local", Status.AGENT_ERROR, "unknown", pre_flight, pre_flight, "",
+                       str(workdir), f"agent {agent_name} not available")
+    agent_version = adapter.version()
+    cmd = adapter.build_command(workdir, task["prompt"], model=None)
+    agent_rc, agent_stdout, agent_stderr, duration = run_step(cmd, workdir, timeout=timeout_sec)
+    if agent_rc == -1:
+        return _result(task, agent_name, "local", Status.TIMEOUT, agent_version, pre_flight, pre_flight, "",
+                       str(workdir), f"agent timed out after {timeout_sec}s")
+    parsed = adapter.parse_output(agent_stdout, agent_stderr, agent_rc)
+    if parsed.exit_code != 0:
+        return _result(task, agent_name, "local", Status.AGENT_ERROR, agent_version, pre_flight, pre_flight, "",
+                       str(workdir), f"agent exited non-zero: {parsed.exit_code}")
+
+    # 8: Capture patch
+    diff_proc = subprocess.run(["git", "diff"], cwd=workdir, capture_output=True, text=True)
+    patch = diff_proc.stdout
+
+    # 9: Grade
+    post = _run_tests(task["test_cmd"], workdir, timeout=timeout_sec, run_subprocess=run_step)
+    post_flight = {"fail_to_pass": {n: post.get(n, TestStatus.ERROR).value for n in fail_to_pass},
+                   "pass_to_pass": {n: post.get(n, TestStatus.ERROR).value for n in pass_to_pass}}
+    status = grade({"fail_to_pass": {n: TestStatus(v) for n, v in pre_flight["fail_to_pass"].items()},
+                    "pass_to_pass": {n: TestStatus(v) for n, v in pre_flight["pass_to_pass"].items()}},
+                   {"fail_to_pass": {n: TestStatus(v) for n, v in post_flight["fail_to_pass"].items()},
+                    "pass_to_pass": {n: TestStatus(v) for n, v in post_flight["pass_to_pass"].items()}})
+
+    return _result(task, agent_name, "local", status, agent_version, pre_flight, post_flight, patch,
+                   str(workdir), "", agent_model=parsed.usage.model,
+                   agent_duration=duration, agent_usage=parsed.usage, repeat=repeat, repeat_index=repeat_index)
+
+
+def _result(task, agent_name, mode, status, agent_version, pre_flight, post_flight, patch,
+            workdir, error, agent_model=None, agent_duration=0.0, agent_usage=None,
+            repeat: int = 1, repeat_index: int | None = None):
+    """Build a result dict in the spec's Output JSON shape."""
+    suffix = f"__{repeat_index}" if repeat_index is not None else ""
+    return {
+        "run_id": f"{_run_id_for_now()}__{agent_name}__{task['instance_id']}{suffix}",
+        "task_id": task["instance_id"],
+        "agent": agent_name,
+        "agent_version": agent_version,
+        "model": agent_model,
+        "mode": mode,
+        "status": status.value,
+        "started_at": _utc_now_iso(),
+        "duration_sec": agent_duration,
+        "harness_git_sha": _harness_git_sha(),
+        "task_source": task.get("source"),
+        "usage": {
+            "tokens_in": agent_usage.tokens_in if agent_usage else None,
+            "tokens_out": agent_usage.tokens_out if agent_usage else None,
+            "cost_usd": agent_usage.cost_usd if agent_usage else None,
+            "billing_mode": agent_usage.billing_mode if agent_usage else "api",
+        },
+        "test_results": {"pre_flight": pre_flight, "post_flight": post_flight},
+        "patch": patch,
+        "workdir": workdir,
+        "error": error,
+    }
+
+
+def _harness_git_sha() -> str:
+    try:
+        return subprocess.check_output(["git", "rev-parse", "--short", "HEAD"], text=True).strip()
+    except Exception:
+        return "unknown"
