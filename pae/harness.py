@@ -80,6 +80,31 @@ def _run_tests(cmd: str, workdir: Path, timeout: int, run_subprocess=_run_subpro
     return parse_pytest_output(stdout + "\n" + stderr)
 
 
+def _fetch_fresh(repo: str, base_commit: str, dest: Path) -> None:
+    """Clone `repo` at `base_commit` into `dest` (network)."""
+    url = f"https://github.com/{repo}.git"
+    subprocess.run(["git", "init", "-q", str(dest)], check=True, capture_output=True)
+    subprocess.run(["git", "remote", "add", "origin", url], cwd=dest, check=True, capture_output=True)
+    subprocess.run(["git", "fetch", "--depth=1", "origin", base_commit], cwd=dest, check=True, capture_output=True)
+    subprocess.run(["git", "checkout", base_commit], cwd=dest, check=True, capture_output=True)
+
+
+def _git_sha_cached() -> str:
+    """Return the harness's git short SHA, computed once per process."""
+    global _git_sha_cache
+    try:
+        if _git_sha_cache is None:
+            _git_sha_cache = subprocess.check_output(
+                ["git", "rev-parse", "--short", "HEAD"], text=True
+            ).strip()
+        return _git_sha_cache
+    except Exception:
+        return "unknown"
+
+
+_git_sha_cache: str | None = None
+
+
 def run(
     task_path: Path,
     agent_name: str,
@@ -98,11 +123,21 @@ def run(
     Args:
         task_path: path to a directory containing task.json (and optional tests.patch, repo/).
         agent_name: name of a registered adapter (e.g. "mock", "claude-code").
-        workdir: optional pre-populated workdir. If None, harness copies from task_path/repo/.
+        workdir: optional pre-populated workdir. If None, harness creates a tempdir.
         timeout_sec: per-stage timeout (setup, pre-flight, agent, grading).
+        fetch_fresh: if True (and workdir is auto-created), clone repo at base_commit
+            from GitHub instead of copying from task_path/repo/.
+        keep_workdir: if True, don't delete the workdir after the run.
+        docker: if True, run setup / pre-flight / agent / grading inside a Docker container.
+        docker_image: base image for docker mode.
+        env_file: env file passed to `docker run --env-file` (for API keys).
         repeat: total number of times this run is being repeated (1 = no repeat).
         repeat_index: 1-based index of this specific run within a repeated batch.
             When `repeat=1`, this is None and the run_id omits the suffix.
+
+    This function runs a SINGLE run. The CLI is responsible for looping when
+    `repeat > 1` (see Task 19). `duration_sec` in the result is the duration of
+    this single run, not the batch.
 
     Returns a dict matching the spec's Output JSON shape.
     """
@@ -110,6 +145,7 @@ def run(
     task = json.loads((task_dir / "task.json").read_text())
     fail_to_pass = task["fail_to_pass"]
     pass_to_pass = task["pass_to_pass"]
+    mode = "docker" if docker else "local"
 
     # 1-3: Resolve task, create workdir, fetch repo
     workdir_owned = workdir is None
@@ -119,14 +155,17 @@ def run(
     workdir.mkdir(parents=True, exist_ok=True)
 
     if workdir_owned:
-        repo_src = task_dir / "repo"
-        if repo_src.exists():
-            for child in repo_src.iterdir():
-                dest = workdir / child.name
-                if child.is_dir():
-                    shutil.copytree(child, dest)
-                else:
-                    shutil.copy2(child, dest)
+        if fetch_fresh:
+            _fetch_fresh(task["repo"], task["base_commit"], workdir)
+        else:
+            repo_src = task_dir / "repo"
+            if repo_src.exists():
+                for child in repo_src.iterdir():
+                    dest = workdir / child.name
+                    if child.is_dir():
+                        shutil.copytree(child, dest)
+                    else:
+                        shutil.copy2(child, dest)
 
     _ensure_git_repo(workdir)
     _apply_test_patch(workdir, task_dir)
@@ -148,7 +187,7 @@ def run(
     if task.get("setup_cmd"):
         setup_rc, _, setup_err, _ = run_step(task["setup_cmd"], workdir, timeout=timeout_sec)
         if setup_rc != 0:
-            return _result(task, agent_name, "local", Status.TASK_ERROR, "unknown", {}, {}, "", str(workdir),
+            return _result(task, agent_name, mode, Status.TASK_ERROR, "unknown", {}, {}, "", str(workdir),
                            f"setup_cmd failed: {setup_err[:200]}")
 
     # 6: Pre-flight
@@ -159,24 +198,24 @@ def run(
     pre_fails_correctly = all(pre_flight["fail_to_pass"][n] != "passed" for n in fail_to_pass)
     pre_passes_correctly = all(pre_flight["pass_to_pass"][n] == "passed" for n in pass_to_pass)
     if not (pre_fails_correctly and pre_passes_correctly):
-        return _result(task, agent_name, "local", Status.TASK_ERROR, "unknown", pre_flight, pre_flight, "",
+        return _result(task, agent_name, mode, Status.TASK_ERROR, "unknown", pre_flight, pre_flight, "",
                        str(workdir), "pre-flight validation failed: fail_to_pass tests do not all fail, "
                        "or pass_to_pass tests do not all pass")
 
     # 7: Run agent
     adapter = get_adapter(agent_name)
     if not adapter.is_available():
-        return _result(task, agent_name, "local", Status.AGENT_ERROR, "unknown", pre_flight, pre_flight, "",
+        return _result(task, agent_name, mode, Status.AGENT_ERROR, "unknown", pre_flight, pre_flight, "",
                        str(workdir), f"agent {agent_name} not available")
     agent_version = adapter.version()
     cmd = adapter.build_command(workdir, task["prompt"], model=None)
     agent_rc, agent_stdout, agent_stderr, duration = run_step(cmd, workdir, timeout=timeout_sec)
     if agent_rc == -1:
-        return _result(task, agent_name, "local", Status.TIMEOUT, agent_version, pre_flight, pre_flight, "",
+        return _result(task, agent_name, mode, Status.TIMEOUT, agent_version, pre_flight, pre_flight, "",
                        str(workdir), f"agent timed out after {timeout_sec}s")
     parsed = adapter.parse_output(agent_stdout, agent_stderr, agent_rc)
     if parsed.exit_code != 0:
-        return _result(task, agent_name, "local", Status.AGENT_ERROR, agent_version, pre_flight, pre_flight, "",
+        return _result(task, agent_name, mode, Status.AGENT_ERROR, agent_version, pre_flight, pre_flight, "",
                        str(workdir), f"agent exited non-zero: {parsed.exit_code}")
 
     # 8: Capture patch
@@ -192,7 +231,14 @@ def run(
                    {"fail_to_pass": {n: TestStatus(v) for n, v in post_flight["fail_to_pass"].items()},
                     "pass_to_pass": {n: TestStatus(v) for n, v in post_flight["pass_to_pass"].items()}})
 
-    return _result(task, agent_name, "local", status, agent_version, pre_flight, post_flight, patch,
+    # Clean up the workdir if we created it and the user doesn't want to keep it.
+    # Done here (after grading) rather than via try/finally because we want the
+    # result dict's `workdir` field to point to a path that existed when the run
+    # finished; the caller can disable cleanup with --keep-workdir.
+    if workdir_owned and not keep_workdir:
+        shutil.rmtree(workdir, ignore_errors=True)
+
+    return _result(task, agent_name, mode, status, agent_version, pre_flight, post_flight, patch,
                    str(workdir), "", agent_model=parsed.usage.model,
                    agent_duration=duration, agent_usage=parsed.usage, repeat=repeat, repeat_index=repeat_index)
 
@@ -212,7 +258,7 @@ def _result(task, agent_name, mode, status, agent_version, pre_flight, post_flig
         "status": status.value,
         "started_at": _utc_now_iso(),
         "duration_sec": agent_duration,
-        "harness_git_sha": _harness_git_sha(),
+        "harness_git_sha": _git_sha_cached(),
         "task_source": task.get("source"),
         "usage": {
             "tokens_in": agent_usage.tokens_in if agent_usage else None,
