@@ -2,9 +2,6 @@ import json
 import shutil
 import subprocess
 import sys
-from pathlib import Path
-
-import pytest
 
 
 def test_pae_runs_and_prints_help():
