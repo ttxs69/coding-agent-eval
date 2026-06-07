@@ -32,28 +32,32 @@ Single Python package `probe-agent-eval` (CLI: `pae`). All components are in one
 probe-agent-eval/
 ├── pyproject.toml             # one Python package, "pae" CLI
 ├── pae/                       # source
-│   ├── cli.py                 # entry point: pae run / build-site / add-task
-│   ├── harness.py             # run loop: clone, run agent, capture patch, grade
-│   ├── grader.py              # apply patch, run hidden tests, parse results
-│   ├── metrics.py             # cost/time/tokens from agent stdout
+│   ├── cli.py                 # entry point: pae run / build-site / add-task / list-agents / report
+│   ├── harness.py             # run loop: fetch repo, apply test patch, run agent, capture patch, grade
+│   ├── grader.py              # run test_cmd in workdir, parse per-test results into {test_name: status}
+│   ├── importer.py            # pae add-task --from-swebench: pull, transform, write task
+│   ├── metrics.py             # aggregation over results/*.json (used by build-site and report)
 │   ├── site.py                # build static leaderboard from results/
 │   └── agents/                # one file per agent
 │       ├── base.py            # AgentAdapter protocol
 │       ├── claude_code.py
 │       ├── codex.py
-│       └── aider.py
+│       ├── aider.py
+│       └── mock.py            # first-class test adapter; excluded from public leaderboard
 ├── tasks/                     # SWE-bench-style task definitions
 │   └── <owner__repo__id>/
 │       ├── task.json          # metadata, base_commit, setup_cmd, etc.
-│       ├── repo/              # the repo at base_commit (git submodule or LFS)
-│       └── tests/             # hidden test patch
+│       ├── repo/              # the repo at base_commit (copied into workdir by default; --fetch-fresh clones from GitHub)
+│       └── tests.patch        # hidden test patch (git-applied before pre-flight; no-op for hand-authored tasks)
 ├── results/                   # JSON output of runs (committed)
 │   └── 2026-06-06T12-34-56__claude__django-12345.json
 ├── site/                      # generated static leaderboard
 │   ├── index.html             # sortable table of agent × task
 │   ├── tasks/<id>.html        # per-task detail
+│   ├── reproducibility.html   # copied from docs/reproducibility.md
 │   └── data/results.json      # aggregate for the table
 ├── docs/                      # how to add tasks, run evals, etc.
+│   └── reproducibility.md     # source for site/reproducibility.html
 └── .github/workflows/         # optional: scheduled leaderboard refresh
 ```
 
@@ -64,7 +68,7 @@ probe-agent-eval/
 
 ## Task Format
 
-Tasks live at `tasks/<owner__repo__id>/task.json`. Format is SWE-bench-compatible in spirit so we can later import swebench's public set with a one-shot script.
+Tasks live at `tasks/<owner__repo__id>/task.json`. Format is SWE-bench-compatible; the first 50 tasks are imported from SWE-bench Verified via `pae add-task --from-swebench` (see the [Importing Tasks from SWE-bench](#importing-tasks-from-swe-bench) section).
 
 ```json
 {
@@ -83,9 +87,9 @@ Tasks live at `tasks/<owner__repo__id>/task.json`. Format is SWE-bench-compatibl
 ```
 
 - **`prompt` is what the agent sees.** The harness is free to support multiple prompt variants per task in the future (zero-shot, with hints, with repo context) to measure prompt sensitivity.
-- **`setup_cmd` is local-only.** Ignored in Docker mode (image pre-bakes the env).
+- **`setup_cmd` runs in both modes**: locally in the workdir, or via `docker exec` in Docker mode. The Docker image provides a baseline environment; `setup_cmd` typically installs language-specific deps (e.g. `pip install -e .`) on top of it.
 - **`fail_to_pass` / `pass_to_pass` are graded by test name, not by exit code.** More robust to flaky runners and partial fixes.
-- The base repo and test patch can be stored as a git submodule, a git LFS pointer, or a one-shot clone script — implementation detail, not part of the spec.
+- The base repo can be stored as a checked-in directory under `repo/` (the importer default), a git submodule, or a git LFS pointer — implementation detail.
 
 ## Importing Tasks from SWE-bench
 
@@ -150,6 +154,8 @@ The harness captures the patch uniformly via `git diff` on the workdir — we do
 
 A `MockAdapter` ships as a first-class adapter (registered alongside Claude Code / Codex / Aider) for use in tests and smoke runs. It writes a pre-canned patch from the test fixture to the workdir, so the full harness can be exercised without API keys. It is clearly marked as a test-only adapter in `pae list-agents`.
 
+**`MockAdapter` results are excluded from the public leaderboard.** `pae build-site` filters out any result whose `agent` field is `mock`. (Test runs still produce result JSON for local development; only the aggregation step filters them out.)
+
 ## Run Lifecycle
 
 ```
@@ -157,9 +163,10 @@ pae run --agent claude --task django-12345 [--docker] [--timeout 30m] [--repeat 
    │
    ├─ 1. Resolve task → load tasks/django__django-12345/task.json
    ├─ 2. Create workdir (temp dir; /tmp/pae-XXXX or ~/.cache/pae/work)
-   ├─ 3. Fetch repo
-   │     ├─ Local:  git clone <repo> workdir && git checkout <base_commit>
-   │     └─ Docker: docker exec into container, same commands
+   ├─ 3. Fetch repo into workdir
+   │     ├─ Local:  copy tasks/<id>/repo/ → workdir (offline, deterministic, default)
+   │     │          --fetch-fresh: git clone <repo> workdir && git checkout <base_commit> (network, up-to-date)
+   │     └─ Docker: docker exec copy (or clone) into the container's workdir
    ├─ 4. Apply test patch (if task has tests.patch)
    │     └─ git apply tasks/<id>/tests.patch in workdir
    │        (No-op for hand-authored tasks where test cases are already in the repo.)
@@ -196,7 +203,7 @@ A task is `failed` if either condition fails. No partial credit at the task leve
 - `skipped` — test was intentionally skipped (e.g. via `pytest.skip`); not counted as pass or fail
 - `xfail` — expected failure; not counted as pass or fail
 
-Only `passed` and `failed` affect resolution. `error`, `skipped`, `xfail` are recorded for diagnostics but do not move the needle.
+Only `passed` and `failed` are grading-relevant. A test in `fail_to_pass` must end as `passed` for the task to resolve; any other status (`failed`, `error`, `skipped`, `xfail`) means the task is `failed`. Similarly, a test in `pass_to_pass` must end as `passed`; any other status is a regression. The other statuses are recorded for diagnostics so we can distinguish "agent's code is broken" (`failed`) from "grader is broken" (`error`) from "test was skipped" (`skipped`/`xfail`).
 
 **Test-name parsing** is per-runner. The grader ships one parser per supported test runner (pytest, unittest, cargo test, npm test, go test). Each parser maps the runner's native output to `{test_name: status}`. New runners = new parser file, no core changes.
 
@@ -245,16 +252,23 @@ Broken tasks and agent crashes must not silently count as "failed" alongside leg
 }
 ```
 
+**Field capture notes:**
+- `agent_version` — captured by the adapter from the installed CLI's own version output (e.g. `claude --version`) at run start. The exact mechanism is adapter-defined; the contract is "the version string of the agent CLI that produced this patch."
+- `started_at` — UTC ISO 8601 with `Z` suffix.
+- `run_id` — filesystem-safe variant of `started_at`: same instant, colons replaced with dashes, slashes removed. Filename-safe.
+
 ## Metrics & Static Site
 
 `pae build-site` reads every `results/*.json` and produces:
 
 - **`data/results.json`** — one row per (agent, model, agent_version) tuple with: `pass_rate`, `n_resolved`, `n_attempted`, median `cost_usd`, median `duration_sec`, median `tokens_in` / `tokens_out`, and `last_run` timestamp.
+- **`data/details/<task_id>__<agent>.json`** — per-run detail for the per-task pages.
 
 **Median unit:** each row's medians are computed over **all individual runs** in `results/` for that (agent, model, agent_version) tuple. If a user runs `--repeat 3` on a task, all three runs are data points (this is intentional — it lets users opt into variance measurement). Median over a small `n` is reported as-is; no bootstrap or confidence interval in v1.
 
+**`n_attempted` is the count of unique tasks** in `results/` for that row, not the count of runs. This makes `5/5` comparable to `32/50`: a row with `--repeat 3` on 10 tasks shows `n_attempted: 10`, not `30`. The run count is implicit in the medians.
+
 **Cost tracking and subscription billing.** `cost_usd` is best-effort. For per-token API billing the adapter populates it from the agent's own accounting. For subscription-billed usage (Claude Max, ChatGPT Pro, etc.) the cost is unknown and `cost_usd` is `null`; a `billing_mode` field is recorded in the result JSON with value `api` or `subscription`. The site shows `cost_usd` as `$?` for subscription rows so users know it's a known unknown, not missing data.
-- **`data/details/<task_id>__<agent>.json`** — per-run detail for the per-task pages.
 
 **`n_attempted` is always shown alongside `pass_rate`** so a row with 5/5 does not look better than a row with 32/50.
 
@@ -274,7 +288,7 @@ User pushes `site/` to `gh-pages` branch, or `pae build-site --publish` shells o
 
 ### Console reporting (local dev)
 
-The static site is the canonical published view, but for local development `pae report --format table` prints a sortable console table of all `results/*.json` files in the current directory, reusing the same aggregation logic as `pae build-site`. This is the same data the site shows, just printed to stdout — no separate code path. Useful when iterating on a task or comparing two agents in the terminal without leaving to look at a browser.
+The static site is the canonical published view, but for local development `pae report --format table` prints a console table of aggregated metrics for all `results/*.json` files in the current directory, sorted by `pass_rate` descending by default, reusing the same aggregation logic as `pae build-site`. This is the same data the site shows, just printed to stdout — no separate code path. Useful when iterating on a task or comparing two agents in the terminal without leaving to look at a browser.
 
 ## Reproducibility
 
