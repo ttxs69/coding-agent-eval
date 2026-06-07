@@ -32,7 +32,14 @@ class ClaudeCodeAdapter:
             return f"unknown ({e})"
 
     def build_command(self, workdir: Path, prompt: str, *, model: str | None) -> list[str]:
-        cmd = ["claude", "-p", prompt, "--output-format", "json"]
+        cmd = [
+            "claude",
+            "-p", prompt,
+            "--output-format", "json",
+            # Required for non-interactive (subprocess) use — without it,
+            # the agent asks for permission to edit files and the run fails.
+            "--dangerously-skip-permissions",
+        ]
         if model:
             cmd += ["--model", model]
         return cmd
@@ -56,10 +63,18 @@ class ClaudeCodeAdapter:
                     envelope = obj
             if envelope is not None:
                 cost = envelope.get("total_cost_usd")
+                # The model name lives under modelUsage.{name} in real output.
+                model_usage = envelope.get("modelUsage") or {}
+                if model_usage and not model:
+                    model = next(iter(model_usage.keys()), None)
+                # Tokens live at envelope.usage.{input,output}_tokens, but
+                # cache_read_input_tokens also contributes to cost.
                 usage = envelope.get("usage") or {}
                 tokens_in = usage.get("input_tokens")
                 tokens_out = usage.get("output_tokens")
-                model = envelope.get("model")
+                if model is None:
+                    # last-ditch: check if model name is on the envelope itself
+                    model = envelope.get("model")
         except Exception:
             pass
         return AgentResult(
