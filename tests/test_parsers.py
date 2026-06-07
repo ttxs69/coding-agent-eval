@@ -62,3 +62,17 @@ tests/test_main.py::test_add XFAIL                          [ 50%]
 def test_parse_pytest_empty():
     assert parse_pytest_output("") == {}
     assert parse_pytest_output("no test results here") == {}
+
+
+def test_parse_pytest_parametrized_ids_with_special_chars():
+    """Parametrized test IDs can contain dots, @, +, etc. — make sure they're preserved."""
+    output = """
+tests/test_x.py::test_y[0.5] PASSED                          [ 50%]
+tests/test_x.py::test_z[a@b.c] FAILED                       [100%]
+========================== 1 failed, 1 passed in 0.02s ===========
+"""
+    result = parse_pytest_output(output)
+    assert result == {
+        "tests/test_x.py::test_y[0.5]": TestStatus.PASSED,
+        "tests/test_x.py::test_z[a@b.c]": TestStatus.FAILED,
+    }

@@ -11,11 +11,11 @@ import re
 
 from pae.agents.base import TestStatus
 
-# pytest's verbose-mode line pattern: tests/path::test_name STATUS [percent]
-# We use a permissive regex that captures any test node id (including parametrized
-# ones like tests/test_x.py::test_y[param]) plus one of the five status words.
+# pytest's verbose-mode line pattern: nodeid STATUS [percent]
+# Use a permissive non-whitespace match for the nodeid so parametrize IDs with
+# dots, @, +, :, etc. (e.g. `test_y[0.5]`, `test_x[email protected]`) are preserved.
 _PYTEST_LINE_RE = re.compile(
-    r"^(?P<nodeid>[\w/\.\-\[\]:]+)::(?P<name>[\w\[\]\-]+)\s+(?P<status>PASSED|FAILED|ERROR|SKIPPED|XFAIL)\b"
+    r"^(?P<nodeid>\S+::\S+)\s+(?P<status>PASSED|FAILED|ERROR|SKIPPED|XFAIL)\b"
 )
 
 
@@ -27,10 +27,9 @@ def parse_pytest_output(output: str) -> dict[str, TestStatus]:
     """
     results: dict[str, TestStatus] = {}
     for line in output.splitlines():
-        line = line.strip()
-        m = _PYTEST_LINE_RE.search(line)
+        stripped = line.strip()
+        m = _PYTEST_LINE_RE.search(stripped)
         if not m:
             continue
-        nodeid = f"{m.group('nodeid')}::{m.group('name')}"
-        results[nodeid] = TestStatus(m.group("status").lower())
+        results[m.group("nodeid")] = TestStatus(m.group("status").lower())
     return results
