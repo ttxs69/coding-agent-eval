@@ -30,9 +30,15 @@ class CodexAdapter:
             return f"unknown ({e})"
 
     def build_command(self, workdir: Path, prompt: str, *, model: str | None) -> list[str]:
-        cmd = ["codex", "-q", prompt, "--json"]
+        cmd = [
+            "codex", "exec", prompt,
+            "--json",  # JSONL event stream to stdout
+            # Required for non-interactive (subprocess) use — without it, codex
+            # asks for confirmation before running shell commands and the run hangs.
+            "--dangerously-bypass-approvals-and-sandbox",
+        ]
         if model:
-            cmd += ["--model", model]
+            cmd += ["-m", model]  # codex uses short -m for model
         return cmd
 
     def parse_output(self, stdout: str, stderr: str, exit_code: int) -> AgentResult:
