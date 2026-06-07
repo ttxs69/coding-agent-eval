@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "probe-agent-eval"
+version = "0.1.0"
+description = "Public benchmark for CLI coding agents (Claude Code, Codex, Aider) on SWE-bench Verified."
+requires-python = ">=3.11"
+dependencies = [
+    "datasets>=2.14",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4",
+    "ruff>=0.1",
+]
+
+[project.scripts]
+pae = "pae.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["pae*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
