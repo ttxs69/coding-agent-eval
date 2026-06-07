@@ -53,6 +53,17 @@ def cmd_list_agents(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_build_site(args: argparse.Namespace) -> int:
+    from pae.site import build_site
+    build_site(
+        results_dir=Path(args.results_dir),
+        out_dir=Path(args.out_dir),
+        docs_dir=Path(args.docs_dir) if args.docs_dir else None,
+    )
+    print(f"wrote site to {args.out_dir}")
+    return 0
+
+
 def cmd_report(args: argparse.Namespace) -> int:
     from pae.metrics import aggregate_results
     from pae.render_table import render_table
@@ -114,6 +125,13 @@ def build_parser() -> argparse.ArgumentParser:
     p_rep.add_argument("--results-dir", default="results", help="where to read result JSONs (default: results)")
     p_rep.add_argument("--format", default="table", choices=["table", "json"], help="output format (default: table)")
     p_rep.set_defaults(func=cmd_report)
+
+    p_bs = sub.add_parser("build-site", help="build the static leaderboard site")
+    p_bs.add_argument("--results-dir", default="results", help="where to read result JSONs")
+    p_bs.add_argument("--out-dir", default="site", help="where to write the site (default: site)")
+    p_bs.add_argument("--docs-dir", default="docs", help="where to find docs (for reproducibility.html)")
+    p_bs.add_argument("--publish", action="store_true", help="also push via `gh` CLI (requires `gh` on PATH)")
+    p_bs.set_defaults(func=cmd_build_site)
 
     return parser
 
