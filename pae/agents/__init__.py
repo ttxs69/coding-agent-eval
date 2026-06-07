@@ -4,7 +4,7 @@ ADAPTERS is the registry used by get_adapter() and list_adapters(). New adapters
 import their class and add an entry here.
 """
 
-from pae.agents.base import AgentAdapter, AgentResult, UsageInfo
+from pae.agents.base import AgentAdapter
 from pae.agents.mock import MockAdapter
 
 ADAPTERS: dict[str, type[AgentAdapter]] = {
@@ -22,7 +22,11 @@ def get_adapter(name: str, **kwargs: object) -> AgentAdapter:
 
 
 def list_adapters() -> list[dict[str, str | bool]]:
-    """Return a list of {name, available} for every registered adapter."""
+    """Return a list of {name, available} for every registered adapter.
+
+    `is_available()` should not normally raise, but the bare `except` is a safety
+    net so a misbehaving adapter can't break the listing.
+    """
     result: list[dict[str, str | bool]] = []
     for name, cls in ADAPTERS.items():
         try:
@@ -34,4 +38,4 @@ def list_adapters() -> list[dict[str, str | bool]]:
     return result
 
 
-__all__ = ["AgentAdapter", "AgentResult", "UsageInfo", "ADAPTERS", "get_adapter", "list_adapters"]
+__all__ = ["AgentAdapter", "ADAPTERS", "get_adapter", "list_adapters"]
