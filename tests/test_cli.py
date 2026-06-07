@@ -74,3 +74,13 @@ def test_pae_add_task_no_fetch(tmp_path):
     task_json = json.loads((tasks[0] / "task.json").read_text())
     assert task_json["source"]["kind"] == "swe-bench"
     assert "fail_to_pass" in task_json
+
+
+def test_pae_list_agents(capsys):
+    result = subprocess.run(
+        [sys.executable, "-m", "pae", "list-agents"],
+        capture_output=True, text=True,
+    )
+    assert result.returncode == 0
+    assert "mock" in result.stdout
+    assert "claude-code" in result.stdout or "codex" in result.stdout  # at least one real

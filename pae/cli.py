@@ -44,6 +44,15 @@ def cmd_add_task(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_list_agents(args: argparse.Namespace) -> int:
+    from pae.agents import list_adapters
+    rows = list_adapters()
+    print(f"{'NAME':<20} AVAILABLE")
+    for r in rows:
+        print(f"{r['name']:<20} {r['available']}")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="pae",
@@ -73,6 +82,9 @@ def build_parser() -> argparse.ArgumentParser:
                       help="skip the git clone (faster import for tests)")
     p_add.add_argument("--tasks-dir", default="tasks", help="where to write tasks (default: tasks)")
     p_add.set_defaults(func=cmd_add_task)
+
+    p_la = sub.add_parser("list-agents", help="list registered agent adapters and availability")
+    p_la.set_defaults(func=cmd_list_agents)
 
     return parser
 
