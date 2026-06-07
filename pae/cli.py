@@ -24,6 +24,26 @@ def cmd_run(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_add_task(args: argparse.Namespace) -> int:
+    if not args.from_swebench:
+        print("error: only --from-swebench is supported in v1", file=sys.stderr)
+        return 2
+    from pae.importer import import_swebench_instance, load_swebench_records
+    records = list(load_swebench_records(
+        instance_ids=args.instance_id or None,
+        split=args.split,
+        limit=args.limit,
+        dataset_path=args.dataset_path,
+    ))
+    for rec in records:
+        import_swebench_instance(
+            rec, tasks_dir=Path(args.tasks_dir),
+            fetch_repo=not args.no_fetch_repo, split=args.split,
+        )
+        print(f"imported {rec.instance_id}")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="pae",
@@ -39,6 +59,20 @@ def build_parser() -> argparse.ArgumentParser:
     p_run.add_argument("--results-dir", default="results", help="where to write result JSON (default: results)")
     p_run.add_argument("--timeout", type=int, default=30, help="per-stage timeout in minutes (default: 30)")
     p_run.set_defaults(func=cmd_run)
+
+    p_add = sub.add_parser("add-task", help="add a new task under tasks/")
+    p_add.add_argument("--from-swebench", action="store_true",
+                      help="import from SWE-bench (default split: verified)")
+    p_add.add_argument("--split", default="test", help="SWE-bench split (default: test)")
+    p_add.add_argument("--limit", type=int, default=None, help="import at most N instances")
+    p_add.add_argument("--instance-id", action="append", default=[],
+                      help="specific instance_id to import (repeatable)")
+    p_add.add_argument("--dataset-path", default=None,
+                      help="path to a local SWE-bench dataset clone (for offline use)")
+    p_add.add_argument("--no-fetch-repo", action="store_true",
+                      help="skip the git clone (faster import for tests)")
+    p_add.add_argument("--tasks-dir", default="tasks", help="where to write tasks (default: tasks)")
+    p_add.set_defaults(func=cmd_add_task)
 
     return parser
 

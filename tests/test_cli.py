@@ -3,6 +3,8 @@ import shutil
 import subprocess
 import sys
 
+import pytest
+
 
 def test_pae_runs_and_prints_help():
     result = subprocess.run(
@@ -50,3 +52,25 @@ def test_pae_run_writes_result_json(tmp_path, tiny_task_path):
     assert data["agent"] == "mock"
     assert data["task_id"] == "tiny__task-1"
     assert data["status"] in {"resolved", "failed"}  # the mock doesn't fix the bug, so likely failed
+
+
+def test_pae_add_task_no_fetch(tmp_path):
+    """`pae add-task --from-swebench --no-fetch-repo` writes a task.json to tasks/.
+
+    This test requires HuggingFace access (the SWE-bench Verified dataset). It
+    is skipped (not failed) if datasets/HF is not available in the test env.
+    """
+    pytest.importorskip("datasets")
+    proj = tmp_path
+    result = subprocess.run(
+        [sys.executable, "-m", "pae", "add-task",
+         "--from-swebench", "--limit", "1", "--no-fetch-repo",
+         "--tasks-dir", str(proj / "tasks")],
+        capture_output=True, text=True, timeout=120,
+    )
+    assert result.returncode == 0, f"add-task failed: {result.stderr}"
+    tasks = list((proj / "tasks").iterdir())
+    assert len(tasks) == 1
+    task_json = json.loads((tasks[0] / "task.json").read_text())
+    assert task_json["source"]["kind"] == "swe-bench"
+    assert "fail_to_pass" in task_json
