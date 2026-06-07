@@ -86,6 +86,33 @@ Tasks live at `tasks/<owner__repo__id>/task.json`. Format is SWE-bench-compatibl
 - **`fail_to_pass` / `pass_to_pass` are graded by test name, not by exit code.** More robust to flaky runners and partial fixes.
 - The base repo and test patch can be stored as a git submodule, a git LFS pointer, or a one-shot clone script — implementation detail, not part of the spec.
 
+## Importing Tasks from SWE-bench
+
+Tasks are not hand-authored in v1 — the first 50+ tasks come from a one-shot import of [SWE-bench Verified](https://huggingface.co/datasets/princeton-nlp/SWE-bench_Verified), the 500-problem human-validated subset curated with OpenAI. The importer is a core `pae add-task` mode, not a side script:
+
+```bash
+# Import a single instance
+pae add-task --from-swebench django__django-12345
+
+# Import a named subset
+pae add-task --from-swebench --split verified --limit 50
+
+# Import from a local SWE-bench checkout
+pae add-task --from-swebench --dataset-path /path/to/SWE-bench --split verified
+```
+
+**What the importer does:**
+1. Pulls the instance metadata (`repo`, `base_commit`, `prompt`, `FAIL_TO_PASS`, `PASS_TO_PASS`) from the SWE-bench dataset (HuggingFace `datasets` library or a local clone).
+2. Renames fields to our schema (`FAIL_TO_PASS` → `fail_to_pass`, etc.).
+3. Writes `task.json` to `tasks/<instance_id>/task.json`.
+4. Records the base commit's repo state (shallow git clone at `base_commit` into `tasks/<id>/repo/`, or a git submodule — implementation choice).
+5. Records the test patch into `tasks/<id>/tests.patch` for reference and grading.
+6. Sets a `source: {kind: "swe-bench", split: "verified", original_id: "..."}` field in `task.json` for provenance.
+
+**Why v1, not v2:** a public leaderboard with zero real tasks is not credible. SWE-bench Verified is the de facto industry baseline (it's what OpenAI, Anthropic, etc. quote numbers from), and importing it for free gives us a comparable dataset on day one. Hand-authored tasks can be added later as supplementary signal.
+
+**Upstream drift:** SWE-bench is stable but not frozen. The importer records the SWE-bench commit hash it imported from in the result metadata, so a result from "SWE-bench @ abc1234" can be re-run for reproducibility.
+
 ## Agent Interface
 
 Defined as a `Protocol` in `pae/agents/base.py` so each adapter is free to handle its CLI's quirks without forcing a shared implementation.
