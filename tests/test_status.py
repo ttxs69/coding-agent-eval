@@ -1,5 +1,3 @@
-import pytest
-
 from pae.agents.base import Status, TestStatus
 
 
