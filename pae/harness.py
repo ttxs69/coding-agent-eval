@@ -272,9 +272,3 @@ def _result(task, agent_name, mode, status, agent_version, pre_flight, post_flig
         "error": error,
     }
 
-
-def _harness_git_sha() -> str:
-    try:
-        return subprocess.check_output(["git", "rev-parse", "--short", "HEAD"], text=True).strip()
-    except Exception:
-        return "unknown"
