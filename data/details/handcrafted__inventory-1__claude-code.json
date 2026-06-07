@@ -3,7 +3,7 @@
   "task_id": "handcrafted__inventory-1",
   "agent": "claude-code",
   "agent_version": "2.1.153 (Claude Code)",
-  "model": "claude-opus-4-8[1m]",
+  "model": "deepseek-v4-pro",
   "mode": "docker",
   "status": "resolved",
   "started_at": "2026-06-07T13:57:10Z",

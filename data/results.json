@@ -1,7 +1,7 @@
 [
   {
     "agent": "claude-code",
-    "model": "claude-opus-4-8[1m]",
+    "model": "deepseek-v4-pro",
     "agent_version": "2.1.153 (Claude Code)",
     "n_resolved": 3,
     "n_attempted": 3,
@@ -14,7 +14,7 @@
   },
   {
     "agent": "codex",
-    "model": null,
+    "model": "MiniMax-M3",
     "agent_version": "codex-cli 0.137.0",
     "n_resolved": 3,
     "n_attempted": 3,
