@@ -23,10 +23,10 @@ _venv_bin = Path(sys.executable).parent
 if str(_venv_bin) not in os.environ.get("PATH", "").split(os.pathsep):
     os.environ["PATH"] = f"{_venv_bin}{os.pathsep}{os.environ.get('PATH', '')}"
 
-from pae.agents import get_adapter
-from pae.agents.base import Status, TestStatus
-from pae.grader import grade
-from pae.parsers import parse_pytest_output
+from pae.agents import get_adapter  # noqa: E402
+from pae.agents.base import Status, TestStatus  # noqa: E402
+from pae.grader import grade  # noqa: E402
+from pae.parsers import parse_pytest_output  # noqa: E402
 
 
 def _utc_now_iso() -> str:
