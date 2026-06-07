@@ -1,0 +1,22 @@
+FROM python:3.11-slim
+
+RUN apt-get update -qq && \
+    apt-get install -y --no-install-recommends \
+        ca-certificates nodejs npm && \
+    rm -rf /var/lib/apt/lists/*
+
+RUN npm install -g @anthropic-ai/claude-code@2.1.168 @openai/codex@0.137.0 2>&1 | tail -3
+
+# Create a non-root user (Claude Code refuses to run as root).
+# Both agent CLIs and the harness need to be able to write under /work.
+RUN useradd --create-home --shell /bin/bash --uid 1000 pae
+
+USER pae
+WORKDIR /home/pae
+ENV HOME=/home/pae
+
+# Sanity check
+RUN python3 --version && \
+    node --version && \
+    echo "claude: $(claude --version 2>&1 | head -1)" && \
+    echo "codex: $(codex --version 2>&1 | head -1)"
