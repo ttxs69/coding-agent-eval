@@ -53,6 +53,30 @@ def cmd_list_agents(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_report(args: argparse.Namespace) -> int:
+    from pae.metrics import aggregate_results
+    from pae.render_table import render_table
+    rows = aggregate_results(Path(args.results_dir))
+    if args.format == "table":
+        headers = ["AGENT", "MODEL", "PASS RATE", "N", "MEDIAN COST", "MEDIAN DUR (s)", "LAST RUN"]
+        def fmt_cost(v):
+            return f"${v:.2f}" if v is not None else "$?"
+        def fmt_dur(v):
+            return f"{v:.0f}" if v is not None else "?"
+        out_rows = [
+            [r["agent"], str(r["model"] or ""),
+             f"{r['pass_rate']*100:.0f}%", str(r["n_attempted"]),
+             fmt_cost(r["median_cost_usd"]), fmt_dur(r["median_duration_sec"]),
+             r["last_run"]]
+            for r in rows
+        ]
+        print(render_table(headers, out_rows))
+    else:
+        import json
+        print(json.dumps(rows, indent=2, default=str))
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="pae",
@@ -85,6 +109,11 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_la = sub.add_parser("list-agents", help="list registered agent adapters and availability")
     p_la.set_defaults(func=cmd_list_agents)
+
+    p_rep = sub.add_parser("report", help="aggregate and display results")
+    p_rep.add_argument("--results-dir", default="results", help="where to read result JSONs (default: results)")
+    p_rep.add_argument("--format", default="table", choices=["table", "json"], help="output format (default: table)")
+    p_rep.set_defaults(func=cmd_report)
 
     return parser
 

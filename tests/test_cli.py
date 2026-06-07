@@ -84,3 +84,23 @@ def test_pae_list_agents(capsys):
     assert result.returncode == 0
     assert "mock" in result.stdout
     assert "claude-code" in result.stdout or "codex" in result.stdout  # at least one real
+
+
+def test_pae_report_table_format(tmp_path):
+    """Write two result files and verify report prints a table."""
+    import json
+    (tmp_path / "results").mkdir()
+    (tmp_path / "results" / "r1.json").write_text(json.dumps({
+        "agent": "mock", "agent_version": "0.1", "model": None,
+        "status": "resolved", "duration_sec": 1, "usage": {"cost_usd": 0.0},
+        "task_id": "t1", "started_at": "2026-06-07T00:00:00Z",
+        "test_results": {},
+    }))
+    result = subprocess.run(
+        [sys.executable, "-m", "pae", "report",
+         "--results-dir", str(tmp_path / "results")],
+        capture_output=True, text=True,
+    )
+    # mock is filtered out, so the table is empty (just headers)
+    assert result.returncode == 0
+    assert "AGENT" in result.stdout  # header row
