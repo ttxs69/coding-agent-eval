@@ -14,13 +14,45 @@ def cmd_run(args: argparse.Namespace) -> int:
     if not (task_path / "task.json").exists():
         print(f"error: task {args.task!r} not found at {task_path}", file=sys.stderr)
         return 2
-    result = run(task_path=task_path, agent_name=args.agent, timeout_sec=args.timeout * 60)
+
     results_dir = Path(args.results_dir)
     results_dir.mkdir(parents=True, exist_ok=True)
-    out = results_dir / f"{result['run_id']}.json"
-    out.write_text(json.dumps(result, indent=2, default=str))
-    print(f"wrote {out}")
-    print(f"status: {result['status']}")
+
+    # Read the instance_id from task.json so the result-file glob matches by
+    # the actual id used in the filename (not the directory name on disk).
+    instance_id = json.loads((task_path / "task.json").read_text())["instance_id"]
+
+    # Resume: per (task, agent, repeat-index), skip if a result file already exists.
+    # With --repeat N, all N indices must be missing for the pair to fully run.
+    workdir = None
+    if args.workdir:
+        workdir = Path(args.workdir)
+    repeat = max(1, args.repeat)
+    for i in range(1, repeat + 1):
+        repeat_index = i if repeat > 1 else None
+        suffix = f"__{i}" if repeat_index is not None else ""
+        out_pattern = f"*__{args.agent}__{instance_id}{suffix}.json"
+        existing = list(results_dir.glob(out_pattern))
+        if existing and not args.force:
+            print(f"skipping {out_pattern}: {len(existing)} existing result(s). Use --force to overwrite.")
+            continue
+        result = run(
+            task_path=task_path,
+            agent_name=args.agent,
+            workdir=workdir,
+            timeout_sec=args.timeout * 60,
+            fetch_fresh=args.fetch_fresh,
+            keep_workdir=args.keep_workdir,
+            docker=args.docker,
+            docker_image=args.docker_image,
+            env_file=Path(args.env_file) if args.env_file else None,
+            repeat=repeat,
+            repeat_index=repeat_index,
+        )
+        out = results_dir / f"{result['run_id']}.json"
+        out.write_text(json.dumps(result, indent=2, default=str))
+        print(f"wrote {out}")
+        print(f"status: {result['status']}")
     return 0
 
 
@@ -97,11 +129,22 @@ def build_parser() -> argparse.ArgumentParser:
     sub = parser.add_subparsers(dest="command", required=False)
 
     p_run = sub.add_parser("run", help="run an agent on a single task")
-    p_run.add_argument("--agent", required=True, help="agent adapter name (e.g. mock, claude-code)")
-    p_run.add_argument("--task", required=True, help="task instance_id under --tasks-dir")
-    p_run.add_argument("--tasks-dir", default="tasks", help="directory containing task subdirs (default: tasks)")
-    p_run.add_argument("--results-dir", default="results", help="where to write result JSON (default: results)")
-    p_run.add_argument("--timeout", type=int, default=30, help="per-stage timeout in minutes (default: 30)")
+    p_run.add_argument("--agent", required=True)
+    p_run.add_argument("--task", required=True)
+    p_run.add_argument("--tasks-dir", default="tasks")
+    p_run.add_argument("--results-dir", default="results")
+    p_run.add_argument("--timeout", type=int, default=30, help="per-stage timeout in minutes")
+    p_run.add_argument("--workdir", default=None, help="pre-populated workdir (skips fetch)")
+    p_run.add_argument("--fetch-fresh", action="store_true",
+                      help="clone the repo from GitHub at base_commit instead of copying from tasks/<id>/repo/")
+    p_run.add_argument("--keep-workdir", action="store_true", help="don't delete the workdir after the run")
+    p_run.add_argument("--force", action="store_true", help="overwrite existing result files for this (task, agent) pair")
+    p_run.add_argument("--repeat", type=int, default=1, help="run this many times (default: 1)")
+    p_run.add_argument("--docker", action="store_true", help="run inside a Docker container")
+    p_run.add_argument("--docker-image", default="python:3.11-slim",
+                      help="base image for --docker mode (default: python:3.11-slim)")
+    p_run.add_argument("--env-file", default=None,
+                      help="file with KEY=VALUE lines, passed to `docker run --env-file` (for API keys)")
     p_run.set_defaults(func=cmd_run)
 
     p_add = sub.add_parser("add-task", help="add a new task under tasks/")

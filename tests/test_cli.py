@@ -104,3 +104,59 @@ def test_pae_report_table_format(tmp_path):
     # mock is filtered out, so the table is empty (just headers)
     assert result.returncode == 0
     assert "AGENT" in result.stdout  # header row
+
+
+def test_pae_run_with_keep_workdir(tmp_path, tiny_task_path):
+    proj = tmp_path
+    tasks = proj / "tasks" / "tiny_task"
+    tasks.mkdir(parents=True)
+    (tasks / "task.json").write_text((tiny_task_path / "task.json").read_text())
+    for child in (tiny_task_path / "repo").iterdir():
+        dest = tasks / "repo" / child.name
+        if child.is_dir():
+            shutil.copytree(child, dest)
+        else:
+            shutil.copy2(child, dest)
+    (proj / "results").mkdir()
+
+    result = subprocess.run(
+        [sys.executable, "-m", "pae", "run", "--agent", "mock",
+         "--task", "tiny_task", "--keep-workdir",
+         "--tasks-dir", str(proj / "tasks"),
+         "--results-dir", str(proj / "results")],
+        capture_output=True, text=True,
+    )
+    assert result.returncode == 0, result.stderr
+    data = json.loads(list((proj / "results").glob("*.json"))[0].read_text())
+    assert "workdir" in data
+    assert data["workdir"]  # non-empty
+
+
+def test_pae_run_force_flag_resumes(tmp_path, tiny_task_path):
+    """Without --force, a second run for the same (task, agent) skips."""
+    proj = tmp_path
+    tasks = proj / "tasks" / "tiny_task"
+    tasks.mkdir(parents=True)
+    (tasks / "task.json").write_text((tiny_task_path / "task.json").read_text())
+    for child in (tiny_task_path / "repo").iterdir():
+        dest = tasks / "repo" / child.name
+        if child.is_dir():
+            shutil.copytree(child, dest)
+        else:
+            shutil.copy2(child, dest)
+    (proj / "results").mkdir()
+
+    base_cmd = [sys.executable, "-m", "pae", "run", "--agent", "mock",
+                "--task", "tiny_task",
+                "--tasks-dir", str(proj / "tasks"),
+                "--results-dir", str(proj / "results")]
+
+    r1 = subprocess.run(base_cmd, capture_output=True, text=True)
+    assert r1.returncode == 0
+    n_after_first = len(list((proj / "results").glob("*.json")))
+
+    r2 = subprocess.run(base_cmd, capture_output=True, text=True)
+    assert "skipping" in r2.stdout or n_after_first == len(list((proj / "results").glob("*.json")))
+
+    r3 = subprocess.run(base_cmd + ["--force"], capture_output=True, text=True)
+    assert r3.returncode == 0
