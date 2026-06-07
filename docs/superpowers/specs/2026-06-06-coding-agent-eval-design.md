@@ -1,7 +1,8 @@
 # Coding Agent Eval — Design
 
 **Date:** 2026-06-06
-**Status:** Approved (pending user review of this document)
+**Status:** Approved
+**Last reviewed:** 2026-06-07
 
 ## Purpose
 
@@ -57,7 +58,7 @@ probe-agent-eval/
 ```
 
 **Key decisions:**
-- **One Python package, one CLI.** `pae run`, `pae build-site`, `pae add-task`, `pae list-agents`.
+- **One Python package, one CLI.** `pae run`, `pae build-site`, `pae add-task`, `pae list-agents`, `pae report`.
 - **Results are committed JSON.** No database. Reproducibility = "this commit shows the state of the leaderboard on date X."
 - **Site is built, not served.** `pae build-site` writes `site/`; user pushes to GitHub Pages / S3 / `gh-pages` branch.
 
@@ -88,7 +89,7 @@ Tasks live at `tasks/<owner__repo__id>/task.json`. Format is SWE-bench-compatibl
 
 ## Importing Tasks from SWE-bench
 
-Tasks are not hand-authored in v1 — the first 50+ tasks come from a one-shot import of [SWE-bench Verified](https://huggingface.co/datasets/princeton-nlp/SWE-bench_Verified), the 500-problem human-validated subset curated with OpenAI. The importer is a core `pae add-task` mode, not a side script:
+Tasks are not hand-authored in v1 — the first **50 tasks** come from a one-shot import of [SWE-bench Verified](https://huggingface.co/datasets/princeton-nlp/SWE-bench_Verified), the 500-problem human-validated subset curated with OpenAI. The importer is a core `pae add-task` mode, not a side script:
 
 ```bash
 # Import a single instance
@@ -138,7 +139,7 @@ class AgentAdapter(Protocol):
 class AgentResult:
     patch: str             # git diff captured by harness (uniform across agents)
     log: str               # raw stdout+stderr for debugging
-    usage: UsageInfo       # best-effort: tokens_in, tokens_out, cost_usd, model_used
+    usage: UsageInfo       # best-effort: tokens_in, tokens_out, cost_usd, model
     exit_code: int
     duration_sec: float
 ```
@@ -152,28 +153,32 @@ A `MockAdapter` ships as a first-class adapter (registered alongside Claude Code
 ## Run Lifecycle
 
 ```
-pae run --agent claude --task django-12345 [--docker] [--timeout 30m]
+pae run --agent claude --task django-12345 [--docker] [--timeout 30m] [--repeat N]
    │
    ├─ 1. Resolve task → load tasks/django__django-12345/task.json
    ├─ 2. Create workdir (temp dir; /tmp/pae-XXXX or ~/.cache/pae/work)
    ├─ 3. Fetch repo
    │     ├─ Local:  git clone <repo> workdir && git checkout <base_commit>
    │     └─ Docker: docker exec into container, same commands
-   ├─ 4. Setup
+   ├─ 4. Apply test patch (if task has tests.patch)
+   │     └─ git apply tasks/<id>/tests.patch in workdir
+   │        (No-op for hand-authored tasks where test cases are already in the repo.)
+   ├─ 5. Setup
    │     ├─ Local:  run setup_cmd in workdir
    │     └─ Docker: docker exec setup_cmd
-   ├─ 5. Pre-flight: run test_cmd, snapshot pass/fail per test name
+   ├─ 6. Pre-flight: run test_cmd, snapshot pass/fail per test name
    │     └─ Validate: fail_to_pass tests currently fail, pass_to_pass currently pass
    │        (If a task fails this check, mark as task_error, do not run agent)
-   ├─ 6. Run agent
+   ├─ 7. Run agent
    │     ├─ Local:  subprocess(agent.build_command(workdir, prompt))
    │     └─ Docker: docker exec subprocess(...)  (or docker run with bind-mount)
-   ├─ 7. Capture patch
+   ├─ 8. Capture patch
    │     └─ git diff workdir → patch (uniform, regardless of agent's claims)
-   ├─ 8. Grade
+   ├─ 9. Grade
    │     └─ Re-run test_cmd, parse per-test results
-   ├─ 9. Write results/<timestamp>__<agent>__<task_id>.json
-   └─ 10. Cleanup workdir (or keep if --keep-workdir, for debugging)
+   ├─ 10. Write results/<timestamp>__<agent>__<task_id>[__<repeat-index>].json
+   │      (Repeat-index is omitted when --repeat is 1.)
+   └─ 11. Cleanup workdir (or keep if --keep-workdir, for debugging)
 ```
 
 ## Grading
@@ -183,6 +188,17 @@ A task is `resolved` iff **all** of:
 - Every test in `pass_to_pass` still passes (no regressions)
 
 A task is `failed` if either condition fails. No partial credit at the task level; per-test results are logged so partial credit is recoverable later.
+
+**Per-test result statuses** (used in the `test_results` JSON map):
+- `passed` — test ran and asserted success
+- `failed` — test ran and asserted failure (counts against the task)
+- `error` — test could not run (collection error, missing import, etc.); distinct from `failed` so we can tell "the agent's code is broken" from "the grader's harness is broken"
+- `skipped` — test was intentionally skipped (e.g. via `pytest.skip`); not counted as pass or fail
+- `xfail` — expected failure; not counted as pass or fail
+
+Only `passed` and `failed` affect resolution. `error`, `skipped`, `xfail` are recorded for diagnostics but do not move the needle.
+
+**Test-name parsing** is per-runner. The grader ships one parser per supported test runner (pytest, unittest, cargo test, npm test, go test). Each parser maps the runner's native output to `{test_name: status}`. New runners = new parser file, no core changes.
 
 ### Status enum
 
@@ -217,7 +233,9 @@ Broken tasks and agent crashes must not silently count as "failed" alongside leg
   "status": "resolved",
   "started_at": "2026-06-06T12:34:56Z",
   "duration_sec": 412.7,
-  "usage": { "tokens_in": 12345, "tokens_out": 6789, "cost_usd": 0.42, "model": "claude-opus-4-7" },
+  "harness_git_sha": "da1b1d0",
+  "task_source": {"kind": "swe-bench", "split": "verified", "original_id": "django__django-12345", "swe_bench_commit": "abc1234"},
+  "usage": { "tokens_in": 12345, "tokens_out": 6789, "cost_usd": 0.42, "model": "claude-opus-4-7", "billing_mode": "api" },
   "test_results": {
     "fail_to_pass": {"tests.test_x.TestFoo.test_bar": "passed"},
     "pass_to_pass": {"tests.test_x.TestFoo.test_baz": "passed"}
@@ -232,6 +250,10 @@ Broken tasks and agent crashes must not silently count as "failed" alongside leg
 `pae build-site` reads every `results/*.json` and produces:
 
 - **`data/results.json`** — one row per (agent, model, agent_version) tuple with: `pass_rate`, `n_resolved`, `n_attempted`, median `cost_usd`, median `duration_sec`, median `tokens_in` / `tokens_out`, and `last_run` timestamp.
+
+**Median unit:** each row's medians are computed over **all individual runs** in `results/` for that (agent, model, agent_version) tuple. If a user runs `--repeat 3` on a task, all three runs are data points (this is intentional — it lets users opt into variance measurement). Median over a small `n` is reported as-is; no bootstrap or confidence interval in v1.
+
+**Cost tracking and subscription billing.** `cost_usd` is best-effort. For per-token API billing the adapter populates it from the agent's own accounting. For subscription-billed usage (Claude Max, ChatGPT Pro, etc.) the cost is unknown and `cost_usd` is `null`; a `billing_mode` field is recorded in the result JSON with value `api` or `subscription`. The site shows `cost_usd` as `$?` for subscription rows so users know it's a known unknown, not missing data.
 - **`data/details/<task_id>__<agent>.json`** — per-run detail for the per-task pages.
 
 **`n_attempted` is always shown alongside `pass_rate`** so a row with 5/5 does not look better than a row with 32/50.
@@ -262,14 +284,14 @@ Every result JSON captures everything needed to reproduce a single number:
 - `started_at`, harness `git_sha` (added by harness at write time)
 - Full `patch` and `test_results`
 
-The site footer links to `reproducibility.md`: "to reproduce row X, run `pae run --agent X --task <list> --docker` with this harness SHA." No magic, no hidden state.
+The site footer links to `reproducibility.html`. The source `docs/reproducibility.md` is hand-written at the project root and copied (markdown → HTML, rendered with a small inline renderer — no external dependency) to `site/reproducibility.html` by `pae build-site`. No magic, no hidden state. The doc content: "to reproduce row X, run `pae run --agent X --task <list> --docker` with this harness SHA."
 
 ## Testing Strategy
 
 The harness itself must be tested, not just trusted. Three layers:
 
-1. **Unit tests** for pure logic (grading rules, status enum, JSON aggregation). These run without Docker, network, or API keys.
-2. **Integration tests** for the run loop, using a **mock agent** that just writes a known patch to the workdir. This exercises the full local flow (clone, setup, agent, grade) end-to-end against a tiny fixture task (single Python file, single test). Integration tests use a small local fixture repo committed to the repo, not network.
+1. **Unit tests** for pure logic (grading rules, status enum, JSON aggregation, per-runner parsers). These run without Docker, network, or API keys.
+2. **Integration tests** for the run loop, using the `MockAdapter` (which writes a pre-canned patch to the workdir) end-to-end against a tiny fixture task. This exercises the full local flow (clone, apply test patch, setup, pre-flight, agent, grade, write result) with a known-bug-and-known-fix task. Integration tests use a small local fixture repo committed to the repo, not network.
 3. **Live smoke test** (manual, not in CI): one real task, one real agent, on a developer machine. Catches environment issues that mocks can't. Documented in `docs/smoke-test.md`.
 
 A test task fixture is checked in at `pae/tests/fixtures/tiny_task/` (under the package, not at the project root, to avoid confusion with the user-facing `tasks/` directory) with a known-bug-and-known-fix so the integration test has a deterministic expected outcome.
@@ -277,7 +299,10 @@ A test task fixture is checked in at `pae/tests/fixtures/tiny_task/` (under the 
 ## Open Questions (Resolved During Brainstorming)
 
 - **Q: Server or no server?** A: Static site, no server. Results in JSON, site generated and pushed.
-- **Q: Which agents v1?** A: Claude Code, Codex, Aider (CLI-only, Protocol-based).
-- **Q: Real tasks or synthetic?** A: Real (SWE-bench style).
-- **Q: What metrics?** A: Pass rate, cost, time, tokens.
+- **Q: Which agents v1?** A: Claude Code, Codex, Aider (CLI-only, Protocol-based). `MockAdapter` ships as a first-class test adapter.
+- **Q: Real tasks or synthetic?** A: Real (SWE-bench style). First 50 tasks imported from SWE-bench Verified.
+- **Q: What metrics?** A: Pass rate, cost, time, tokens. Subscription-billed runs show `null` cost.
 - **Q: Local or Docker first?** A: Local default, Docker opt-in.
+- **Q: Hand-author tasks or import?** A: Import SWE-bench Verified for v1; hand-authored tasks can supplement later.
+- **Q: Concurrency in v1?** A: Single-threaded. `--parallel N` deferred.
+- **Q: Public reporting?** A: Static site is canonical; `pae report --format table` is the local-dev view.
