@@ -35,7 +35,7 @@ probe-agent-eval/
 │   ├── cli.py                 # entry point: pae run / build-site / add-task / list-agents / report
 │   ├── harness.py             # run loop: fetch repo, apply test patch, run agent, capture patch, grade
 │   ├── grader.py              # run test_cmd in workdir, parse per-test results into {test_name: status}
-│   ├── importer.py            # pae add-task --from-swebench: pull, transform, write task
+│   ├── importer.py            # cae add-task --from-swebench: pull, transform, write task
 │   ├── metrics.py             # aggregation over results/*.json (used by build-site and report)
 │   ├── site.py                # build static leaderboard from results/
 │   └── agents/                # one file per agent
@@ -62,13 +62,13 @@ probe-agent-eval/
 ```
 
 **Key decisions:**
-- **One Python package, one CLI.** `pae run`, `pae build-site`, `pae add-task`, `pae list-agents`, `pae report`.
+- **One Python package, one CLI.** `pae run`, `cae build-site`, `pae add-task`, `cae list-agents`, `cae report`.
 - **Results are committed JSON.** No database. Reproducibility = "this commit shows the state of the leaderboard on date X."
-- **Site is built, not served.** `pae build-site` writes `site/`; user pushes to GitHub Pages / S3 / `gh-pages` branch.
+- **Site is built, not served.** `cae build-site` writes `site/`; user pushes to GitHub Pages / S3 / `gh-pages` branch.
 
 ## Task Format
 
-Tasks live at `tasks/<owner__repo__id>/task.json`. Format is SWE-bench-compatible; the first 50 tasks are imported from SWE-bench Verified via `pae add-task --from-swebench` (see the [Importing Tasks from SWE-bench](#importing-tasks-from-swe-bench) section).
+Tasks live at `tasks/<owner__repo__id>/task.json`. Format is SWE-bench-compatible; the first 50 tasks are imported from SWE-bench Verified via `cae add-task --from-swebench` (see the [Importing Tasks from SWE-bench](#importing-tasks-from-swe-bench) section).
 
 ```json
 {
@@ -97,13 +97,13 @@ Tasks are not hand-authored in v1 — the first **50 tasks** come from a one-sho
 
 ```bash
 # Import a single instance
-pae add-task --from-swebench django__django-12345
+cae add-task --from-swebench django__django-12345
 
 # Import a named subset
-pae add-task --from-swebench --split verified --limit 50
+cae add-task --from-swebench --split verified --limit 50
 
 # Import from a local SWE-bench checkout
-pae add-task --from-swebench --dataset-path /path/to/SWE-bench --split verified
+cae add-task --from-swebench --dataset-path /path/to/SWE-bench --split verified
 ```
 
 **What the importer does:**
@@ -154,11 +154,11 @@ class AgentResult:
 
 The harness captures the patch uniformly via `git diff` on the workdir — we do not trust any agent's own diff output. The adapter's only job for patches is to set the working directory and let the agent run.
 
-`pae list-agents` calls `is_available()` on every registered adapter and prints a table of which ones are usable in the current environment. Pre-run, the harness re-checks `is_available()` for each requested agent and fails fast with a clear error if any are missing — no mid-run "command not found" surprises.
+`cae list-agents` calls `is_available()` on every registered adapter and prints a table of which ones are usable in the current environment. Pre-run, the harness re-checks `is_available()` for each requested agent and fails fast with a clear error if any are missing — no mid-run "command not found" surprises.
 
-A `MockAdapter` ships as a first-class adapter (registered alongside Claude Code / Codex / Aider) for use in tests and smoke runs. It writes a pre-canned patch from the test fixture to the workdir, so the full harness can be exercised without API keys. It is clearly marked as a test-only adapter in `pae list-agents`.
+A `MockAdapter` ships as a first-class adapter (registered alongside Claude Code / Codex / Aider) for use in tests and smoke runs. It writes a pre-canned patch from the test fixture to the workdir, so the full harness can be exercised without API keys. It is clearly marked as a test-only adapter in `cae list-agents`.
 
-**`MockAdapter` results are excluded from the public leaderboard.** `pae build-site` filters out any result whose `agent` field is `mock`. (Test runs still produce result JSON for local development; only the aggregation step filters them out.)
+**`MockAdapter` results are excluded from the public leaderboard.** `cae build-site` filters out any result whose `agent` field is `mock`. (Test runs still produce result JSON for local development; only the aggregation step filters them out.)
 
 ## Run Lifecycle
 
@@ -271,7 +271,7 @@ Broken tasks and agent crashes must not silently count as "failed" alongside leg
 
 ## Metrics & Static Site
 
-`pae build-site` reads every `results/*.json` and produces:
+`cae build-site` reads every `results/*.json` and produces:
 
 - **`data/results.json`** — one row per (agent, model, agent_version) tuple with: `pass_rate`, `n_resolved`, `n_attempted`, median `cost_usd`, median `duration_sec`, median `tokens_in` / `tokens_out`, and `last_run` timestamp.
 - **`data/details/<task_id>__<agent>.json`** — per-run detail for the per-task pages.
@@ -292,7 +292,7 @@ Broken tasks and agent crashes must not silently count as "failed" alongside leg
 
 ### Tech
 
-Plain HTML + ~50 lines of vanilla JS for sorting. No React, no bundler, no build step beyond `pae build-site`. CSS is hand-rolled, ~100 lines, dark-mode via `prefers-color-scheme`. Diff highlighting uses [highlight.js](https://highlightjs.org/) (single ~50KB file, no JS framework) loaded from a local copy in `site/vendor/`. Total `site/` weight: a few hundred KB even with hundreds of tasks.
+Plain HTML + ~50 lines of vanilla JS for sorting. No React, no bundler, no build step beyond `cae build-site`. CSS is hand-rolled, ~100 lines, dark-mode via `prefers-color-scheme`. Diff highlighting uses [highlight.js](https://highlightjs.org/) (single ~50KB file, no JS framework) loaded from a local copy in `site/vendor/`. Total `site/` weight: a few hundred KB even with hundreds of tasks.
 
 ### Hosting
 
@@ -300,7 +300,7 @@ User pushes `site/` to `gh-pages` branch, or `pae build-site --publish` shells o
 
 ### Console reporting (local dev)
 
-The static site is the canonical published view, but for local development `pae report --format table` prints a console table of aggregated metrics for all `results/*.json` files in the current directory, sorted by `pass_rate` descending by default, reusing the same aggregation logic as `pae build-site`. This is the same data the site shows, just printed to stdout — no separate code path. Useful when iterating on a task or comparing two agents in the terminal without leaving to look at a browser.
+The static site is the canonical published view, but for local development `pae report --format table` prints a console table of aggregated metrics for all `results/*.json` files in the current directory, sorted by `pass_rate` descending by default, reusing the same aggregation logic as `cae build-site`. This is the same data the site shows, just printed to stdout — no separate code path. Useful when iterating on a task or comparing two agents in the terminal without leaving to look at a browser.
 
 ## Reproducibility
 
@@ -310,7 +310,7 @@ Every result JSON captures everything needed to reproduce a single number:
 - `started_at`, harness `git_sha` (added by harness at write time)
 - Full `patch` and `test_results`
 
-The site footer links to `reproducibility.html`. The source `docs/reproducibility.md` is hand-written at the project root and copied (markdown → HTML, rendered with a small inline renderer — no external dependency) to `site/reproducibility.html` by `pae build-site`. No magic, no hidden state. The doc content: "to reproduce row X, run `pae run --agent X --task <list> --docker` with this harness SHA."
+The site footer links to `reproducibility.html`. The source `docs/reproducibility.md` is hand-written at the project root and copied (markdown → HTML, rendered with a small inline renderer — no external dependency) to `site/reproducibility.html` by `cae build-site`. No magic, no hidden state. The doc content: "to reproduce row X, run `pae run --agent X --task <list> --docker` with this harness SHA."
 
 ## Testing Strategy
 

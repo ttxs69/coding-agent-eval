@@ -24,7 +24,7 @@ def test_full_vertical_slice_replay(tmp_path, tiny_task_path):
     (proj / "results").mkdir()
 
     result = subprocess.run(
-        [sys.executable, "-m", "pae", "run", "--agent", "mock",
+        [sys.executable, "-m", "cae", "run", "--agent", "mock",
          "--task", "tiny_task",
          "--tasks-dir", str(proj / "tasks"),
          "--results-dir", str(proj / "results")],
@@ -50,7 +50,7 @@ def test_full_vertical_slice_replay(tmp_path, tiny_task_path):
 
 
 def test_aggregate_after_run(tmp_path, tiny_task_path):
-    """After a run, pae report and pae build-site should work end-to-end."""
+    """After a run, cae report and cae build-site should work end-to-end."""
     proj = tmp_path
     tasks = proj / "tasks" / "tiny_task"
     tasks.mkdir(parents=True)
@@ -66,7 +66,7 @@ def test_aggregate_after_run(tmp_path, tiny_task_path):
     (proj / "results").mkdir()
 
     subprocess.run(
-        [sys.executable, "-m", "pae", "run", "--agent", "mock",
+        [sys.executable, "-m", "cae", "run", "--agent", "mock",
          "--task", "tiny_task",
          "--tasks-dir", str(proj / "tasks"),
          "--results-dir", str(proj / "results")],
@@ -75,7 +75,7 @@ def test_aggregate_after_run(tmp_path, tiny_task_path):
 
     # report --format table should run cleanly
     r = subprocess.run(
-        [sys.executable, "-m", "pae", "report",
+        [sys.executable, "-m", "cae", "report",
          "--results-dir", str(proj / "results")],
         capture_output=True, text=True, timeout=30,
     )
@@ -84,7 +84,7 @@ def test_aggregate_after_run(tmp_path, tiny_task_path):
     # build-site should produce an index.html
     site_out = proj / "site"
     r2 = subprocess.run(
-        [sys.executable, "-m", "pae", "build-site",
+        [sys.executable, "-m", "cae", "build-site",
          "--results-dir", str(proj / "results"),
          "--out-dir", str(site_out)],
         capture_output=True, text=True, timeout=30,

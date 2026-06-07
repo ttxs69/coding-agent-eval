@@ -5,8 +5,8 @@ Two paths: import from SWE-bench or author by hand.
 ## Import from SWE-bench
 
 ```
-pae add-task --from-swebench --limit 50
-pae add-task --from-swebench --instance-id django__django-12345
+cae add-task --from-swebench --limit 50
+cae add-task --from-swebench --instance-id django__django-12345
 ```
 
 The importer writes `tasks/<id>/task.json`, `tests.patch`, and `repo/` (a git checkout at `base_commit`).

@@ -6,18 +6,18 @@ import sys
 import pytest
 
 
-def test_pae_runs_and_prints_help():
+def test_cae_runs_and_prints_help():
     result = subprocess.run(
-        [sys.executable, "-m", "pae", "--help"],
+        [sys.executable, "-m", "cae", "--help"],
         capture_output=True,
         text=True,
     )
     assert result.returncode == 0
-    assert "pae" in result.stdout.lower() or "usage" in result.stdout.lower()
+    assert "cae" in result.stdout.lower() or "usage" in result.stdout.lower()
 
 
-def test_pae_run_writes_result_json(tmp_path, tiny_task_path):
-    """`pae run --agent mock --task <tiny>` should write a result JSON to results/."""
+def test_cae_run_writes_result_json(tmp_path, tiny_task_path):
+    """`cae run --agent mock --task <tiny>` should write a result JSON to results/."""
     # copy the fixture into tasks/ under tmp cwd
     proj = tmp_path
     (proj / "tasks" / "tiny__task-1" / "repo").mkdir(parents=True)
@@ -38,7 +38,7 @@ def test_pae_run_writes_result_json(tmp_path, tiny_task_path):
     (proj / "results").mkdir()
 
     result = subprocess.run(
-        [sys.executable, "-m", "pae", "run", "--agent", "mock",
+        [sys.executable, "-m", "cae", "run", "--agent", "mock",
          "--task", "tiny__task-1",
          "--tasks-dir", str(proj / "tasks"),
          "--results-dir", str(proj / "results")],
@@ -54,8 +54,8 @@ def test_pae_run_writes_result_json(tmp_path, tiny_task_path):
     assert data["status"] in {"resolved", "failed"}  # the mock doesn't fix the bug, so likely failed
 
 
-def test_pae_add_task_no_fetch(tmp_path):
-    """`pae add-task --from-swebench --no-fetch-repo` writes a task.json to tasks/.
+def test_cae_add_task_no_fetch(tmp_path):
+    """`cae add-task --from-swebench --no-fetch-repo` writes a task.json to tasks/.
 
     This test requires HuggingFace access (the SWE-bench Verified dataset). It
     is skipped (not failed) if datasets/HF is not available in the test env.
@@ -63,7 +63,7 @@ def test_pae_add_task_no_fetch(tmp_path):
     pytest.importorskip("datasets")
     proj = tmp_path
     result = subprocess.run(
-        [sys.executable, "-m", "pae", "add-task",
+        [sys.executable, "-m", "cae", "add-task",
          "--from-swebench", "--limit", "1", "--no-fetch-repo",
          "--tasks-dir", str(proj / "tasks")],
         capture_output=True, text=True, timeout=120,
@@ -76,9 +76,9 @@ def test_pae_add_task_no_fetch(tmp_path):
     assert "fail_to_pass" in task_json
 
 
-def test_pae_list_agents(capsys):
+def test_cae_list_agents(capsys):
     result = subprocess.run(
-        [sys.executable, "-m", "pae", "list-agents"],
+        [sys.executable, "-m", "cae", "list-agents"],
         capture_output=True, text=True,
     )
     assert result.returncode == 0
@@ -86,7 +86,7 @@ def test_pae_list_agents(capsys):
     assert "claude-code" in result.stdout or "codex" in result.stdout  # at least one real
 
 
-def test_pae_report_table_format(tmp_path):
+def test_cae_report_table_format(tmp_path):
     """Write two result files and verify report prints a table."""
     import json
     (tmp_path / "results").mkdir()
@@ -97,7 +97,7 @@ def test_pae_report_table_format(tmp_path):
         "test_results": {},
     }))
     result = subprocess.run(
-        [sys.executable, "-m", "pae", "report",
+        [sys.executable, "-m", "cae", "report",
          "--results-dir", str(tmp_path / "results")],
         capture_output=True, text=True,
     )
@@ -106,7 +106,7 @@ def test_pae_report_table_format(tmp_path):
     assert "AGENT" in result.stdout  # header row
 
 
-def test_pae_run_with_keep_workdir(tmp_path, tiny_task_path):
+def test_cae_run_with_keep_workdir(tmp_path, tiny_task_path):
     proj = tmp_path
     tasks = proj / "tasks" / "tiny_task"
     tasks.mkdir(parents=True)
@@ -120,7 +120,7 @@ def test_pae_run_with_keep_workdir(tmp_path, tiny_task_path):
     (proj / "results").mkdir()
 
     result = subprocess.run(
-        [sys.executable, "-m", "pae", "run", "--agent", "mock",
+        [sys.executable, "-m", "cae", "run", "--agent", "mock",
          "--task", "tiny_task", "--keep-workdir",
          "--tasks-dir", str(proj / "tasks"),
          "--results-dir", str(proj / "results")],
@@ -132,7 +132,7 @@ def test_pae_run_with_keep_workdir(tmp_path, tiny_task_path):
     assert data["workdir"]  # non-empty
 
 
-def test_pae_run_force_flag_resumes(tmp_path, tiny_task_path):
+def test_cae_run_force_flag_resumes(tmp_path, tiny_task_path):
     """Without --force, a second run for the same (task, agent) skips."""
     proj = tmp_path
     tasks = proj / "tasks" / "tiny_task"
@@ -146,7 +146,7 @@ def test_pae_run_force_flag_resumes(tmp_path, tiny_task_path):
             shutil.copy2(child, dest)
     (proj / "results").mkdir()
 
-    base_cmd = [sys.executable, "-m", "pae", "run", "--agent", "mock",
+    base_cmd = [sys.executable, "-m", "cae", "run", "--agent", "mock",
                 "--task", "tiny_task",
                 "--tasks-dir", str(proj / "tasks"),
                 "--results-dir", str(proj / "results")]
@@ -162,7 +162,7 @@ def test_pae_run_force_flag_resumes(tmp_path, tiny_task_path):
     assert r3.returncode == 0
 
 
-def test_pae_run_docker_flag_accepted(tmp_path, tiny_task_path):
+def test_cae_run_docker_flag_accepted(tmp_path, tiny_task_path):
     """`--docker` is accepted by argparse; the run will fail if `docker` is not
     on PATH. We mock `subprocess.run` to assert that the docker-runner branch
     is actually invoked (i.e., the harness called `docker run ...`).
@@ -172,7 +172,7 @@ def test_pae_run_docker_flag_accepted(tmp_path, tiny_task_path):
     the `subprocess.run` boundary into the child process.
     """
     from unittest.mock import patch, MagicMock
-    from pae.harness import run as harness_run
+    from cae.harness import run as harness_run
 
     proj = tmp_path
     tasks = proj / "tasks" / "tiny_task"
@@ -208,7 +208,7 @@ def test_pae_run_docker_flag_accepted(tmp_path, tiny_task_path):
     assert docker_calls, "expected at least one docker invocation with --docker"
 
 
-def test_pae_run_docker_flag_rejected_by_docker_check(tmp_path, tiny_task_path):
+def test_cae_run_docker_flag_rejected_by_docker_check(tmp_path, tiny_task_path):
     """If docker is not available, --docker should fail fast."""
     from unittest.mock import patch
 
@@ -229,7 +229,7 @@ def test_pae_run_docker_flag_rejected_by_docker_check(tmp_path, tiny_task_path):
     # Block `docker` from PATH
     with patch("shutil.which", return_value=None):
         result = subprocess.run(
-            [sys.executable, "-m", "pae", "run", "--agent", "mock",
+            [sys.executable, "-m", "cae", "run", "--agent", "mock",
              "--task", "tiny_task", "--docker",
              "--tasks-dir", str(proj / "tasks"),
              "--results-dir", str(proj / "results")],

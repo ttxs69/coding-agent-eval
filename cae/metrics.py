@@ -1,6 +1,6 @@
 """Aggregate result JSONs into leaderboard rows.
 
-Used by both `pae build-site` (writes data/results.json) and `pae report`
+Used by both `cae build-site` (writes data/results.json) and `cae report`
 (prints a console table). The mock adapter is filtered out.
 """
 

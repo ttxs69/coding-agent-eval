@@ -1,5 +1,5 @@
-from pae.agents.base import Status, TestStatus
-from pae.grader import grade
+from cae.agents.base import Status, TestStatus
+from cae.grader import grade
 
 
 def test_resolved_when_all_fail_to_pass_now_pass_and_no_regressions():

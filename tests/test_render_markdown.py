@@ -1,4 +1,4 @@
-from pae.render_markdown import render_markdown
+from cae.render_markdown import render_markdown
 
 
 def test_renders_heading():
@@ -18,8 +18,8 @@ def test_renders_code_block():
 
 
 def test_renders_inline_code():
-    html = render_markdown("run `pae run` now")
-    assert "<code>pae run</code>" in html
+    html = render_markdown("run `cae run` now")
+    assert "<code>cae run</code>" in html
 
 
 def test_renders_link():

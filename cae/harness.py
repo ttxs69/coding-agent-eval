@@ -21,15 +21,15 @@ from pathlib import Path
 # fail with "command not found" when run via `subprocess.run(..., shell=True)`.
 # This is ONLY needed for local mode — in docker mode the container has its own
 # python, and prepending the host's venv path would break the container.
-if "pae_skip_path_setup" not in os.environ:
+if "cae_skip_path_setup" not in os.environ:
     _venv_bin = Path(sys.executable).parent
     if str(_venv_bin) not in os.environ.get("PATH", "").split(os.pathsep):
         os.environ["PATH"] = f"{_venv_bin}{os.pathsep}{os.environ.get('PATH', '')}"
 
-from pae.agents import get_adapter  # noqa: E402
-from pae.agents.base import Status, TestStatus  # noqa: E402
-from pae.grader import grade  # noqa: E402
-from pae.parsers import parse_pytest_output  # noqa: E402
+from cae.agents import get_adapter  # noqa: E402
+from cae.agents.base import Status, TestStatus  # noqa: E402
+from cae.grader import grade  # noqa: E402
+from cae.parsers import parse_pytest_output  # noqa: E402
 
 
 def _utc_now_iso() -> str:
@@ -187,7 +187,7 @@ def run(
     # 1-3: Resolve task, create workdir, fetch repo
     workdir_owned = workdir is None
     if workdir is None:
-        workdir = Path(tempfile.mkdtemp(prefix="pae-"))
+        workdir = Path(tempfile.mkdtemp(prefix="cae-"))
     workdir = Path(workdir)
     workdir.mkdir(parents=True, exist_ok=True)
 
@@ -214,7 +214,7 @@ def run(
     # In docker mode, start ONE container and exec into it for each step so state
     # (e.g. `pip install pytest` in setup_cmd) persists to test_cmd.
     if docker:
-        from pae.docker_run import Container
+        from cae.docker_run import Container
         container = Container(
             docker_image, workdir,
             env_file=env_file,

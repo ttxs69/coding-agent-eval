@@ -8,7 +8,7 @@ Per the spec:
 
 from __future__ import annotations
 
-from pae.agents.base import Status, TestStatus
+from cae.agents.base import Status, TestStatus
 
 
 def grade(

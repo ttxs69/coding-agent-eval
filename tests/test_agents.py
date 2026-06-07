@@ -4,8 +4,8 @@ from pathlib import Path
 
 import pytest
 
-from pae.agents import get_adapter, list_adapters
-from pae.agents.mock import MockAdapter
+from cae.agents import get_adapter, list_adapters
+from cae.agents.mock import MockAdapter
 
 
 def test_mock_adapter_is_available():
@@ -60,7 +60,7 @@ def test_list_adapters_includes_mock():
 
 
 def test_claude_code_adapter_build_command_includes_prompt():
-    from pae.agents.claude_code import ClaudeCodeAdapter
+    from cae.agents.claude_code import ClaudeCodeAdapter
     cmd = ClaudeCodeAdapter().build_command(Path("/tmp/x"), "do the thing", model=None)
     assert cmd[0] == "claude"
     # prompt should appear somewhere in the argv
@@ -70,7 +70,7 @@ def test_claude_code_adapter_build_command_includes_prompt():
 
 
 def test_claude_code_parse_output_extracts_usage():
-    from pae.agents.claude_code import ClaudeCodeAdapter
+    from cae.agents.claude_code import ClaudeCodeAdapter
     # Claude Code's --output-format json emits a final assistant message with usage
     fake_json = json.dumps({
         "type": "result",
@@ -86,7 +86,7 @@ def test_claude_code_parse_output_extracts_usage():
 
 
 def test_codex_adapter_build_command_includes_prompt():
-    from pae.agents.codex import CodexAdapter
+    from cae.agents.codex import CodexAdapter
     cmd = CodexAdapter().build_command(Path("/tmp/x"), "do the thing", model=None)
     assert cmd[0] == "codex"
     assert any("do the thing" in str(arg) for arg in cmd)
@@ -95,7 +95,7 @@ def test_codex_adapter_build_command_includes_prompt():
 
 
 def test_codex_parse_output_extracts_usage():
-    from pae.agents.codex import CodexAdapter
+    from cae.agents.codex import CodexAdapter
     fake = json.dumps({
         "type": "turn.completed",
         "usage": {"input_tokens": 200, "output_tokens": 80, "cost_usd": 0.05},
@@ -109,7 +109,7 @@ def test_codex_parse_output_extracts_usage():
 
 
 def test_aider_adapter_build_command_includes_prompt():
-    from pae.agents.aider import AiderAdapter
+    from cae.agents.aider import AiderAdapter
     cmd = AiderAdapter().build_command(Path("/tmp/x"), "do the thing", model=None)
     assert cmd[0] == "aider"
     assert "do the thing" in cmd
@@ -119,7 +119,7 @@ def test_aider_adapter_build_command_includes_prompt():
 
 def test_aider_parse_output_no_native_json():
     """Aider doesn't emit JSON by default; cost is unknown."""
-    from pae.agents.aider import AiderAdapter
+    from cae.agents.aider import AiderAdapter
     result = AiderAdapter().parse_output("Aider ran.", "", 0)
     assert result.usage.cost_usd is None
     assert result.usage.tokens_in is None

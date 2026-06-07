@@ -1,4 +1,4 @@
-"""Shared pytest fixtures for pae tests."""
+"""Shared pytest fixtures for cae tests."""
 
 import os
 import sys

@@ -15,7 +15,7 @@ from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
 
-from pae.metrics import aggregate_results
+from cae.metrics import aggregate_results
 
 
 def _now_iso() -> str:
@@ -59,7 +59,7 @@ def _index_html(rows: list[dict], harness_sha: str) -> str:
         for r in rows
     )
     return f"""<!doctype html>
-<html><head><meta charset="utf-8"><title>pae leaderboard</title>
+<html><head><meta charset="utf-8"><title>cae leaderboard</title>
 <style>
 body {{ font: 14px/1.4 system-ui, sans-serif; max-width: 1200px; margin: 2em auto; padding: 0 1em; }}
 table {{ border-collapse: collapse; width: 100%; }}
@@ -74,7 +74,7 @@ footer {{ margin-top: 2em; color: #888; font-size: 12px; }}
   th, td {{ border-color: #333; }}
 }}
 </style></head><body>
-<h1>pae leaderboard</h1>
+<h1>cae leaderboard</h1>
 <p>Public, reproducible benchmark of CLI coding agents on SWE-bench Verified.</p>
 <table id="lb">
 <thead><tr>
@@ -163,6 +163,6 @@ def build_site(results_dir: Path, out_dir: Path, docs_dir: Path | None = None) -
 
     # 4. Reproducibility doc (if source present)
     if docs_dir and (docs_dir / "reproducibility.md").exists():
-        from pae.render_markdown import render_markdown
+        from cae.render_markdown import render_markdown
         md = (docs_dir / "reproducibility.md").read_text()
         (out_dir / "reproducibility.html").write_text(render_markdown(md))

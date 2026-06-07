@@ -13,7 +13,7 @@ env/
 build/
 dist/
 
-# Generated static site (output of `pae build-site`)
+# Generated static site (output of `cae build-site`)
 site/
 
 # Test / cache artifacts

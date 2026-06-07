@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import re
 
-from pae.agents.base import TestStatus
+from cae.agents.base import TestStatus
 
 # pytest's verbose-mode line pattern: nodeid STATUS [percent]
 # Use a permissive non-whitespace match for the nodeid so parametrize IDs with

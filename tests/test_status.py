@@ -1,4 +1,4 @@
-from pae.agents.base import Status, TestStatus
+from cae.agents.base import Status, TestStatus
 
 
 def test_status_values():

@@ -7,19 +7,19 @@ Manual end-to-end check before tagging a release. Not run in CI.
 1. Import one SWE-bench Verified task (no network-heavy repo fetch — use `--no-fetch-repo` for the smoke test):
 
    ```
-   pae add-task --from-swebench --instance-id django__django-12345 --no-fetch-repo
+   cae add-task --from-swebench --instance-id django__django-12345 --no-fetch-repo
    ```
 
 2. List available agents:
 
    ```
-   pae list-agents
+   cae list-agents
    ```
 
 3. Run the mock adapter against the imported task to verify the harness + importer round-trip:
 
    ```
-   pae run --agent mock --task django__django-12345
+   cae run --agent mock --task django__django-12345
    cat results/<run_id>.json
    ```
 

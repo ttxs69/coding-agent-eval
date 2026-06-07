@@ -4,11 +4,11 @@ ADAPTERS is the registry used by get_adapter() and list_adapters(). New adapters
 import their class and add an entry here.
 """
 
-from pae.agents.aider import AiderAdapter
-from pae.agents.base import AgentAdapter
-from pae.agents.claude_code import ClaudeCodeAdapter
-from pae.agents.codex import CodexAdapter
-from pae.agents.mock import MockAdapter
+from cae.agents.aider import AiderAdapter
+from cae.agents.base import AgentAdapter
+from cae.agents.claude_code import ClaudeCodeAdapter
+from cae.agents.codex import CodexAdapter
+from cae.agents.mock import MockAdapter
 
 ADAPTERS: dict[str, type[AgentAdapter]] = {
     "mock": MockAdapter,

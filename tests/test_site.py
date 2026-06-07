@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from pae.site import build_site
+from cae.site import build_site
 
 
 @pytest.fixture

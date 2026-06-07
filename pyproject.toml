@@ -18,10 +18,10 @@ dev = [
 ]
 
 [project.scripts]
-pae = "pae.cli:main"
+cae = "cae.cli:main"
 
 [tool.setuptools.packages.find]
-include = ["pae*"]
+include = ["cae*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -33,6 +33,6 @@ line-length = 100
 target-version = "py311"
 
 [tool.pyright]
-include = ["pae", "tests"]
+include = ["cae", "tests"]
 pythonVersion = "3.11"
 venv = ".venv"

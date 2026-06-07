@@ -23,7 +23,7 @@ probe-agent-eval/
 │   ├── cli.py                 # argparse entry: run / build-site / add-task / list-agents / report
 │   ├── harness.py             # run loop: steps 1-11 from spec
 │   ├── grader.py              # status decision: pre_flight vs post_flight vs fail_to_pass/pass_to_pass
-│   ├── importer.py            # pae add-task --from-swebench
+│   ├── importer.py            # cae add-task --from-swebench
 │   ├── metrics.py             # aggregation: median, pass_rate, n_attempted (used by build-site and report)
 │   ├── site.py                # build static leaderboard
 │   ├── parsers.py             # per-runner parsers (pytest in v1; unittest, etc. added later)
@@ -71,7 +71,7 @@ probe-agent-eval/
 
 ## Phase 1: Vertical Slice (Tasks 1–8)
 
-Goal: a working end-to-end `pae run` with the mock adapter against a tiny in-repo task. After Task 8, `pae run --agent mock --task tiny_task` produces a result JSON. Everything after Phase 1 is iteration on this base.
+Goal: a working end-to-end `pae run` with the mock adapter against a tiny in-repo task. After Task 8, `cae run --agent mock --task tiny_task` produces a result JSON. Everything after Phase 1 is iteration on this base.
 
 ### Task 1: Project Skeleton
 
@@ -79,7 +79,7 @@ Goal: a working end-to-end `pae run` with the mock adapter against a tiny in-rep
 - Create: `pyproject.toml`
 - Create: `pae/__init__.py`
 - Create: `pae/cli.py`
-- Create: `pae/__main__.py` (enables `python -m pae`)
+- Create: `pae/__main__.py` (enables `python -m cae`)
 - Create: `tests/__init__.py`
 - Create: `tests/test_cli.py`
 - Create: `results/.gitkeep`
@@ -94,9 +94,9 @@ import subprocess
 import sys
 
 
-def test_pae_runs_and_prints_help():
+def test_cae_runs_and_prints_help():
     result = subprocess.run(
-        [sys.executable, "-m", "pae", "--help"],
+        [sys.executable, "-m", "cae", "--help"],
         capture_output=True,
         text=True,
     )
@@ -106,7 +106,7 @@ def test_pae_runs_and_prints_help():
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `cd /Users/sarace/dev/probe/agent_eval && python -m pytest tests/test_cli.py::test_pae_runs_and_prints_help -v`
+Run: `cd /Users/sarace/dev/probe/agent_eval && python -m pytest tests/test_cli.py::test_cae_runs_and_prints_help -v`
 Expected: FAIL with `ModuleNotFoundError: No module named 'pae'`
 
 - [ ] **Step 3: Create `pyproject.toml`**
@@ -162,7 +162,7 @@ __version__ = "0.1.0"
 - [ ] **Step 5: Create `pae/cli.py`**
 
 ```python
-"""Command-line interface for pae."""
+"""Command-line interface for cae."""
 
 import argparse
 import sys
@@ -170,7 +170,7 @@ import sys
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="pae",
+        prog="cae",
         description="Evaluate CLI coding agents on SWE-bench tasks.",
     )
     parser.add_argument("--version", action="store_true", help="print version and exit")
@@ -195,9 +195,9 @@ if __name__ == "__main__":
 - [ ] **Step 5b: Create `pae/__main__.py`**
 
 ```python
-"""Allow `python -m pae` to invoke the CLI."""
+"""Allow `python -m cae` to invoke the CLI."""
 
-from pae.cli import main
+from cae.cli import main
 
 raise SystemExit(main())
 ```
@@ -253,7 +253,7 @@ Expected: install succeeds, no errors.
 
 - [ ] **Step 10: Run test to verify it passes**
 
-Run: `pytest tests/test_cli.py::test_pae_runs_and_prints_help -v`
+Run: `pytest tests/test_cli.py::test_cae_runs_and_prints_help -v`
 Expected: PASS
 
 - [ ] **Step 11: Commit**
@@ -276,7 +276,7 @@ git commit -m "Task 1: project skeleton (pyproject, CLI, package init, __main__)
 
 ```python
 # tests/test_status.py
-from pae.agents.base import Status, TestStatus
+from cae.agents.base import Status, TestStatus
 
 
 def test_status_values():
@@ -425,8 +425,8 @@ git commit -m "Task 2: core types (Status, TestStatus, AgentAdapter Protocol)"
 
 ```python
 # tests/test_parsers.py
-from pae.parsers import parse_pytest_output
-from pae.agents.base import TestStatus
+from cae.parsers import parse_pytest_output
+from cae.agents.base import TestStatus
 
 
 def test_parse_pytest_all_pass():
@@ -510,7 +510,7 @@ from __future__ import annotations
 
 import re
 
-from pae.agents.base import TestStatus
+from cae.agents.base import TestStatus
 
 # pytest's verbose-mode line pattern: tests/path::test_name STATUS [percent]
 # We use a permissive regex that captures any test node id (including parametrized
@@ -561,8 +561,8 @@ git commit -m "Task 3: pytest parser"
 
 ```python
 # tests/test_grader.py
-from pae.agents.base import Status, TestStatus
-from pae.grader import grade
+from cae.agents.base import Status, TestStatus
+from cae.grader import grade
 
 
 def test_resolved_when_all_fail_to_pass_now_pass_and_no_regressions():
@@ -631,7 +631,7 @@ Per the spec:
 
 from __future__ import annotations
 
-from pae.agents.base import Status, TestStatus
+from cae.agents.base import Status, TestStatus
 
 
 def grade(
@@ -683,9 +683,9 @@ from pathlib import Path
 
 import pytest
 
-from pae.agents import get_adapter, list_adapters
-from pae.agents.base import AgentResult, UsageInfo
-from pae.agents.mock import MockAdapter
+from cae.agents import get_adapter, list_adapters
+from cae.agents.base import AgentResult, UsageInfo
+from cae.agents.mock import MockAdapter
 
 
 def test_mock_adapter_is_available():
@@ -766,7 +766,7 @@ import shutil
 import subprocess
 from pathlib import Path
 
-from pae.agents.base import AgentAdapter, AgentResult, UsageInfo
+from cae.agents.base import AgentAdapter, AgentResult, UsageInfo
 
 
 MOCK_VERSION = "mock-0.1.0"
@@ -806,8 +806,8 @@ ADAPTERS is the registry used by get_adapter() and list_adapters(). New adapters
 import their class and add an entry here.
 """
 
-from pae.agents.base import AgentAdapter, AgentResult, UsageInfo
-from pae.agents.mock import MockAdapter
+from cae.agents.base import AgentAdapter, AgentResult, UsageInfo
+from cae.agents.mock import MockAdapter
 
 ADAPTERS: dict[str, type[AgentAdapter]] = {
     "mock": MockAdapter,
@@ -969,8 +969,8 @@ from pathlib import Path
 
 import pytest
 
-from pae.agents.mock import MockAdapter
-from pae.harness import run
+from cae.agents.mock import MockAdapter
+from cae.harness import run
 
 
 def test_run_resolves_tiny_task_with_mock_that_fixes_the_bug(tmp_path, tiny_task_path):
@@ -1027,10 +1027,10 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 
-from pae.agents import get_adapter
-from pae.agents.base import Status, TestStatus
-from pae.grader import grade
-from pae.parsers import parse_pytest_output
+from cae.agents import get_adapter
+from cae.agents.base import Status, TestStatus
+from cae.grader import grade
+from cae.parsers import parse_pytest_output
 
 
 def _utc_now_iso() -> str:
@@ -1147,7 +1147,7 @@ def run(
     # Pick a subprocess runner: local (default) or docker (Task 22).
     def run_step(cmd, cwd, timeout):
         if docker:
-            from pae.docker_run import exec_in
+            from cae.docker_run import exec_in
             return exec_in(
                 docker_image,
                 cmd if isinstance(cmd, list) else cmd.split(),
@@ -1279,8 +1279,8 @@ from pathlib import Path
 import pytest
 
 
-def test_pae_run_writes_result_json(tmp_path, tiny_task_path):
-    """`pae run --agent mock --task <tiny>` should write a result JSON to results/."""
+def test_cae_run_writes_result_json(tmp_path, tiny_task_path):
+    """`cae run --agent mock --task <tiny>` should write a result JSON to results/."""
     # copy the fixture into tasks/ under tmp cwd
     proj = tmp_path
     (proj / "tasks" / "tiny__task-1" / "repo").mkdir(parents=True)
@@ -1293,7 +1293,7 @@ def test_pae_run_writes_result_json(tmp_path, tiny_task_path):
     (proj / "results").mkdir()
 
     result = subprocess.run(
-        [sys.executable, "-m", "pae", "run", "--agent", "mock",
+        [sys.executable, "-m", "cae", "run", "--agent", "mock",
          "--task", "tiny__task-1",
          "--tasks-dir", str(proj / "tasks"),
          "--results-dir", str(proj / "results")],
@@ -1311,13 +1311,13 @@ def test_pae_run_writes_result_json(tmp_path, tiny_task_path):
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `pytest tests/test_cli.py::test_pae_run_writes_result_json -v`
+Run: `pytest tests/test_cli.py::test_cae_run_writes_result_json -v`
 Expected: FAIL with `error: unrecognized arguments: run` or similar
 
 - [ ] **Step 3: Update `pae/cli.py`**
 
 ```python
-"""Command-line interface for pae."""
+"""Command-line interface for cae."""
 
 from __future__ import annotations
 
@@ -1333,7 +1333,7 @@ def _default_results_dir() -> Path:
 
 
 def cmd_run(args: argparse.Namespace) -> int:
-    from pae.harness import run
+    from cae.harness import run
     task_path = Path(args.tasks_dir) / args.task
     if not (task_path / "task.json").exists():
         print(f"error: task {args.task!r} not found at {task_path}", file=sys.stderr)
@@ -1350,7 +1350,7 @@ def cmd_run(args: argparse.Namespace) -> int:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="pae",
+        prog="cae",
         description="Evaluate CLI coding agents on SWE-bench tasks.",
     )
     parser.add_argument("--version", action="store_true", help="print version and exit")
@@ -1394,11 +1394,11 @@ Expected: PASS (2 tests: the original help test and the new run test)
 Run:
 ```
 cd /Users/sarace/dev/probe/agent_eval
-python -m pae run --agent mock --task tiny__task-1 --tasks-dir tests/fixtures/tasks --results-dir /tmp/pae-smoke
+python -m cae run --agent mock --task tiny__task-1 --tasks-dir tests/fixtures/tasks --results-dir /tmp/pae-smoke
 ```
 Note: the test fixture isn't at `tests/fixtures/tasks` — it's at `tests/fixtures/tiny_task`. Adjust: `--tasks-dir tests/fixtures` and `--task tiny_task`.
 
-Run: `python -m pae run --agent mock --task tiny_task --tasks-dir tests/fixtures --results-dir /tmp/pae-smoke`
+Run: `python -m cae run --agent mock --task tiny_task --tasks-dir tests/fixtures --results-dir /tmp/pae-smoke`
 Expected: `wrote /tmp/pae-smoke/<run_id>.json`, `status: failed` (because the mock doesn't fix the bug).
 
 - [ ] **Step 6: Commit**
@@ -1408,7 +1408,7 @@ git add pae/cli.py tests/test_cli.py
 git commit -m "Task 8: pae run CLI subcommand — vertical slice end-to-end"
 ```
 
-**After Task 8:** the vertical slice is working. `pae run --agent mock --task <task>` produces a result JSON. Everything below is iteration.
+**After Task 8:** the vertical slice is working. `cae run --agent mock --task <task>` produces a result JSON. Everything below is iteration.
 
 ---
 
@@ -1432,7 +1432,7 @@ from unittest.mock import patch
 
 import pytest
 
-from pae.importer import import_swebench_instance, SWEbenchRecord
+from cae.importer import import_swebench_instance, SWEbenchRecord
 
 
 @pytest.fixture
@@ -1665,7 +1665,7 @@ def cmd_add_task(args: argparse.Namespace) -> int:
     if not args.from_swebench:
         print("error: only --from-swebench is supported in v1", file=sys.stderr)
         return 2
-    from pae.importer import import_swebench_instance, load_swebench_records
+    from cae.importer import import_swebench_instance, load_swebench_records
     records = list(load_swebench_records(
         instance_ids=args.instance_id or None,
         split=args.split,
@@ -1686,8 +1686,8 @@ def cmd_add_task(args: argparse.Namespace) -> int:
 Append to `tests/test_cli.py`:
 
 ```python
-def test_pae_add_task_no_fetch(tmp_path):
-    """`pae add-task --from-swebench --no-fetch-repo` writes a task.json to tasks/.
+def test_cae_add_task_no_fetch(tmp_path):
+    """`cae add-task --from-swebench --no-fetch-repo` writes a task.json to tasks/.
 
     This test requires HuggingFace access (the SWE-bench Verified dataset). It
     is skipped (not failed) if datasets/HF is not available in the test env.
@@ -1695,7 +1695,7 @@ def test_pae_add_task_no_fetch(tmp_path):
     pytest.importorskip("datasets")
     proj = tmp_path
     result = subprocess.run(
-        [sys.executable, "-m", "pae", "add-task",
+        [sys.executable, "-m", "cae", "add-task",
          "--from-swebench", "--limit", "1", "--no-fetch-repo",
          "--tasks-dir", str(proj / "tasks")],
         capture_output=True, text=True, timeout=120,
@@ -1741,19 +1741,19 @@ Manual end-to-end check before tagging a release. Not run in CI.
 1. Import one SWE-bench Verified task (no network-heavy repo fetch — use `--no-fetch-repo` for the smoke test):
 
    ```
-   pae add-task --from-swebench --instance-id django__django-12345 --no-fetch-repo
+   cae add-task --from-swebench --instance-id django__django-12345 --no-fetch-repo
    ```
 
 2. List available agents:
 
    ```
-   pae list-agents
+   cae list-agents
    ```
 
 3. Run the mock adapter against the imported task to verify the harness + importer round-trip:
 
    ```
-   pae run --agent mock --task django__django-12345
+   cae run --agent mock --task django__django-12345
    cat results/<run_id>.json
    ```
 
@@ -1792,12 +1792,12 @@ Append to `tests/test_agents.py`:
 
 ```python
 def test_claude_code_adapter_is_available_returns_bool():
-    from pae.agents.claude_code import ClaudeCodeAdapter
+    from cae.agents.claude_code import ClaudeCodeAdapter
     assert isinstance(ClaudeCodeAdapter().is_available(), bool)
 
 
 def test_claude_code_adapter_build_command_includes_prompt():
-    from pae.agents.claude_code import ClaudeCodeAdapter
+    from cae.agents.claude_code import ClaudeCodeAdapter
     cmd = ClaudeCodeAdapter().build_command(Path("/tmp/x"), "do the thing", model=None)
     assert cmd[0] == "claude"
     # prompt should appear somewhere in the argv
@@ -1807,7 +1807,7 @@ def test_claude_code_adapter_build_command_includes_prompt():
 
 
 def test_claude_code_parse_output_extracts_usage():
-    from pae.agents.claude_code import ClaudeCodeAdapter
+    from cae.agents.claude_code import ClaudeCodeAdapter
     # Claude Code's --output-format json emits a final assistant message with usage
     fake_json = json.dumps({
         "type": "result",
@@ -1846,7 +1846,7 @@ import shutil
 import subprocess
 from pathlib import Path
 
-from pae.agents.base import AgentAdapter, AgentResult, UsageInfo
+from cae.agents.base import AgentAdapter, AgentResult, UsageInfo
 
 
 class ClaudeCodeAdapter:
@@ -1917,7 +1917,7 @@ ADAPTERS: dict[str, type[AgentAdapter]] = {
 }
 ```
 
-(Add `from pae.agents.claude_code import ClaudeCodeAdapter` at the top.)
+(Add `from cae.agents.claude_code import ClaudeCodeAdapter` at the top.)
 
 - [ ] **Step 5: Run test to verify it passes**
 
@@ -1946,7 +1946,7 @@ Append to `tests/test_agents.py`:
 
 ```python
 def test_codex_adapter_build_command_includes_prompt():
-    from pae.agents.codex import CodexAdapter
+    from cae.agents.codex import CodexAdapter
     cmd = CodexAdapter().build_command(Path("/tmp/x"), "do the thing", model=None)
     assert cmd[0] == "codex"
     assert any("do the thing" in str(arg) for arg in cmd)
@@ -1955,7 +1955,7 @@ def test_codex_adapter_build_command_includes_prompt():
 
 
 def test_codex_parse_output_extracts_usage():
-    from pae.agents.codex import CodexAdapter
+    from cae.agents.codex import CodexAdapter
     fake = json.dumps({
         "type": "turn.completed",
         "usage": {"input_tokens": 200, "output_tokens": 80, "cost_usd": 0.05},
@@ -1989,7 +1989,7 @@ import shutil
 import subprocess
 from pathlib import Path
 
-from pae.agents.base import AgentAdapter, AgentResult, UsageInfo
+from cae.agents.base import AgentAdapter, AgentResult, UsageInfo
 
 
 class CodexAdapter:
@@ -2047,7 +2047,7 @@ class CodexAdapter:
 In `pae/agents/__init__.py`:
 
 ```python
-from pae.agents.codex import CodexAdapter
+from cae.agents.codex import CodexAdapter
 
 ADAPTERS: dict[str, type[AgentAdapter]] = {
     "mock": MockAdapter,
@@ -2083,7 +2083,7 @@ Append to `tests/test_agents.py`:
 
 ```python
 def test_aider_adapter_build_command_includes_prompt():
-    from pae.agents.aider import AiderAdapter
+    from cae.agents.aider import AiderAdapter
     cmd = AiderAdapter().build_command(Path("/tmp/x"), "do the thing", model=None)
     assert cmd[0] == "aider"
     assert "do the thing" in cmd
@@ -2093,7 +2093,7 @@ def test_aider_adapter_build_command_includes_prompt():
 
 def test_aider_parse_output_no_native_json():
     """Aider doesn't emit JSON by default; cost is unknown."""
-    from pae.agents.aider import AiderAdapter
+    from cae.agents.aider import AiderAdapter
     result = AiderAdapter().parse_output("Aider ran.", "", 0)
     assert result.usage.cost_usd is None
     assert result.usage.tokens_in is None
@@ -2122,12 +2122,12 @@ import shutil
 import subprocess
 from pathlib import Path
 
-from pae.agents.base import AgentAdapter, AgentResult, UsageInfo
+from cae.agents.base import AgentAdapter, AgentResult, UsageInfo
 
 
 class AiderAdapter:
     name = "aider"
-    default_model = None  # aider uses the user's configured model; no pae default
+    default_model = None  # aider uses the user's configured model; no cae default
 
     def is_available(self) -> bool:
         return shutil.which("aider") is not None
@@ -2162,7 +2162,7 @@ class AiderAdapter:
 In `pae/agents/__init__.py`:
 
 ```python
-from pae.agents.aider import AiderAdapter
+from cae.agents.aider import AiderAdapter
 
 ADAPTERS: dict[str, type[AgentAdapter]] = {
     "mock": MockAdapter,
@@ -2186,7 +2186,7 @@ git commit -m "Task 13: Aider adapter"
 
 ---
 
-### Task 14: `pae list-agents` CLI
+### Task 14: `cae list-agents` CLI
 
 **Files:**
 - Modify: `pae/cli.py`
@@ -2197,9 +2197,9 @@ git commit -m "Task 13: Aider adapter"
 Append to `tests/test_cli.py`:
 
 ```python
-def test_pae_list_agents(capsys):
+def test_cae_list_agents(capsys):
     result = subprocess.run(
-        [sys.executable, "-m", "pae", "list-agents"],
+        [sys.executable, "-m", "cae", "list-agents"],
         capture_output=True, text=True,
     )
     assert result.returncode == 0
@@ -2209,7 +2209,7 @@ def test_pae_list_agents(capsys):
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `pytest tests/test_cli.py::test_pae_list_agents -v`
+Run: `pytest tests/test_cli.py::test_cae_list_agents -v`
 Expected: FAIL with `unrecognized arguments: list-agents`
 
 - [ ] **Step 3: Add `list-agents` to `pae/cli.py`**
@@ -2218,7 +2218,7 @@ Add a command function before `build_parser`:
 
 ```python
 def cmd_list_agents(args: argparse.Namespace) -> int:
-    from pae.agents import list_adapters
+    from cae.agents import list_adapters
     rows = list_adapters()
     print(f"{'NAME':<20} AVAILABLE")
     for r in rows:
@@ -2242,7 +2242,7 @@ Expected: PASS (4 tests)
 
 ```bash
 git add pae/cli.py tests/test_cli.py
-git commit -m "Task 14: pae list-agents CLI"
+git commit -m "Task 14: cae list-agents CLI"
 ```
 
 ---
@@ -2264,7 +2264,7 @@ from pathlib import Path
 
 import pytest
 
-from pae.metrics import aggregate_results
+from cae.metrics import aggregate_results
 
 
 @pytest.fixture
@@ -2341,7 +2341,7 @@ Expected: FAIL with `ModuleNotFoundError`
 ```python
 """Aggregate result JSONs into leaderboard rows.
 
-Used by both `pae build-site` (writes data/results.json) and `pae report`
+Used by both `cae build-site` (writes data/results.json) and `cae report`
 (prints a console table). The mock adapter is filtered out.
 """
 
@@ -2407,7 +2407,7 @@ git commit -m "Task 15: metrics.aggregate_results"
 
 ---
 
-### Task 16: `pae report` CLI
+### Task 16: `cae report` CLI
 
 **Files:**
 - Create: `pae/render_table.py` (hand-rolled console table)
@@ -2444,8 +2444,8 @@ Add before `build_parser`:
 
 ```python
 def cmd_report(args: argparse.Namespace) -> int:
-    from pae.metrics import aggregate_results
-    from pae.render_table import render_table
+    from cae.metrics import aggregate_results
+    from cae.render_table import render_table
     rows = aggregate_results(Path(args.results_dir))
     if args.format == "table":
         headers = ["AGENT", "MODEL", "PASS RATE", "N", "MEDIAN COST", "MEDIAN DUR (s)", "LAST RUN"]
@@ -2481,7 +2481,7 @@ In `build_parser`:
 Append to `tests/test_cli.py`:
 
 ```python
-def test_pae_report_table_format(tmp_path):
+def test_cae_report_table_format(tmp_path):
     """Write two result files and verify report prints a table."""
     import json
     (tmp_path / "results").mkdir()
@@ -2492,7 +2492,7 @@ def test_pae_report_table_format(tmp_path):
         "test_results": {},
     }))
     result = subprocess.run(
-        [sys.executable, "-m", "pae", "report",
+        [sys.executable, "-m", "cae", "report",
          "--results-dir", str(tmp_path / "results")],
         capture_output=True, text=True,
     )
@@ -2532,7 +2532,7 @@ from pathlib import Path
 
 import pytest
 
-from pae.site import build_site
+from cae.site import build_site
 
 
 @pytest.fixture
@@ -2597,7 +2597,7 @@ from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
 
-from pae.metrics import aggregate_results
+from cae.metrics import aggregate_results
 
 
 def _now_iso() -> str:
@@ -2637,7 +2637,7 @@ def _index_html(rows: list[dict], harness_sha: str) -> str:
         for r in rows
     )
     return f"""<!doctype html>
-<html><head><meta charset="utf-8"><title>pae leaderboard</title>
+<html><head><meta charset="utf-8"><title>cae leaderboard</title>
 <style>
 body {{ font: 14px/1.4 system-ui, sans-serif; max-width: 1200px; margin: 2em auto; padding: 0 1em; }}
 table {{ border-collapse: collapse; width: 100%; }}
@@ -2652,7 +2652,7 @@ footer {{ margin-top: 2em; color: #888; font-size: 12px; }}
   th, td {{ border-color: #333; }}
 }}
 </style></head><body>
-<h1>pae leaderboard</h1>
+<h1>cae leaderboard</h1>
 <p>Public, reproducible benchmark of CLI coding agents on SWE-bench Verified.</p>
 <table id="lb">
 <thead><tr>
@@ -2731,7 +2731,7 @@ def build_site(results_dir: Path, out_dir: Path, docs_dir: Path | None = None) -
 
     # 4. Reproducibility doc (if source present)
     if docs_dir and (docs_dir / "reproducibility.md").exists():
-        from pae.render_markdown import render_markdown
+        from cae.render_markdown import render_markdown
         md = (docs_dir / "reproducibility.md").read_text()
         (out_dir / "reproducibility.html").write_text(render_markdown(md))
 ```
@@ -2747,7 +2747,7 @@ Add before `build_parser`:
 
 ```python
 def cmd_build_site(args: argparse.Namespace) -> int:
-    from pae.site import build_site
+    from cae.site import build_site
     build_site(
         results_dir=Path(args.results_dir),
         out_dir=Path(args.out_dir),
@@ -2793,7 +2793,7 @@ git commit -m "Task 17: pae build-site (static leaderboard)"
 
 ```python
 # tests/test_render_markdown.py
-from pae.render_markdown import render_markdown
+from cae.render_markdown import render_markdown
 
 
 def test_renders_heading():
@@ -2969,7 +2969,7 @@ Replace the existing `cmd_run` and `p_run` setup:
 
 ```python
 def cmd_run(args: argparse.Namespace) -> int:
-    from pae.harness import run
+    from cae.harness import run
     task_path = Path(args.tasks_dir) / args.task
     if not (task_path / "task.json").exists():
         print(f"error: task {args.task!r} not found at {task_path}", file=sys.stderr)
@@ -3052,7 +3052,7 @@ Add this cleanup logic to the harness near the end of `run` (before the final re
 Append to `tests/test_cli.py`:
 
 ```python
-def test_pae_run_with_keep_workdir(tmp_path, tiny_task_path):
+def test_cae_run_with_keep_workdir(tmp_path, tiny_task_path):
     proj = tmp_path
     tasks = proj / "tasks" / "tiny_task"
     tasks.mkdir(parents=True)
@@ -3062,7 +3062,7 @@ def test_pae_run_with_keep_workdir(tmp_path, tiny_task_path):
     (proj / "results").mkdir()
 
     result = subprocess.run(
-        [sys.executable, "-m", "pae", "run", "--agent", "mock",
+        [sys.executable, "-m", "cae", "run", "--agent", "mock",
          "--task", "tiny_task", "--keep-workdir",
          "--tasks-dir", str(proj / "tasks"),
          "--results-dir", str(proj / "results")],
@@ -3075,7 +3075,7 @@ def test_pae_run_with_keep_workdir(tmp_path, tiny_task_path):
     assert data["workdir"]  # non-empty
 
 
-def test_pae_run_force_flag_resumes(tmp_path, tiny_task_path):
+def test_cae_run_force_flag_resumes(tmp_path, tiny_task_path):
     """Without --force, a second run for the same (task, agent) skips."""
     proj = tmp_path
     tasks = proj / "tasks" / "tiny_task"
@@ -3085,7 +3085,7 @@ def test_pae_run_force_flag_resumes(tmp_path, tiny_task_path):
         (tasks / "repo" / child.name).write_bytes(child.read_bytes())
     (proj / "results").mkdir()
 
-    base_cmd = [sys.executable, "-m", "pae", "run", "--agent", "mock",
+    base_cmd = [sys.executable, "-m", "cae", "run", "--agent", "mock",
                 "--task", "tiny_task",
                 "--tasks-dir", str(proj / "tasks"),
                 "--results-dir", str(proj / "results")]
@@ -3131,8 +3131,8 @@ Two paths: import from SWE-bench or author by hand.
 ## Import from SWE-bench
 
 ```
-pae add-task --from-swebench --limit 50
-pae add-task --from-swebench --instance-id django__django-12345
+cae add-task --from-swebench --limit 50
+cae add-task --from-swebench --instance-id django__django-12345
 ```
 
 The importer writes `tasks/<id>/task.json`, `tests.patch`, and `repo/` (a git checkout at `base_commit`).
@@ -3186,8 +3186,8 @@ pae --help
 ## Run a task
 
 ```
-pae list-agents
-pae run --agent mock --task tiny_task --tasks-dir tests/fixtures --results-dir /tmp/pae
+cae list-agents
+cae run --agent mock --task tiny_task --tasks-dir tests/fixtures --results-dir /tmp/pae
 ```
 
 The result is written to `/tmp/pae/<run_id>.json`.
@@ -3197,7 +3197,7 @@ The result is written to `/tmp/pae/<run_id>.json`.
 From SWE-bench Verified:
 
 ```
-pae add-task --from-swebench --limit 50
+cae add-task --from-swebench --limit 50
 ```
 
 Or by hand: see `docs/adding-tasks.md`.
@@ -3205,7 +3205,7 @@ Or by hand: see `docs/adding-tasks.md`.
 ## Build the leaderboard site
 
 ```
-pae build-site --results-dir results --out-dir site
+cae build-site --results-dir results --out-dir site
 ```
 
 Deploy `site/` to GitHub Pages (or run `pae build-site --publish` to push via the `gh` CLI).
@@ -3214,7 +3214,7 @@ Deploy `site/` to GitHub Pages (or run `pae build-site --publish` to push via th
 
 ```
 pytest -v
-ruff check pae tests
+ruff check cae tests
 ```
 
 ## Status
@@ -3263,7 +3263,7 @@ def test_full_vertical_slice_replay(tmp_path, tiny_task_path):
     (proj / "results").mkdir()
 
     result = subprocess.run(
-        [sys.executable, "-m", "pae", "run", "--agent", "mock",
+        [sys.executable, "-m", "cae", "run", "--agent", "mock",
          "--task", "tiny_task",
          "--tasks-dir", str(proj / "tasks"),
          "--results-dir", str(proj / "results")],
@@ -3301,7 +3301,7 @@ def test_aggregate_after_run(tmp_path, tiny_task_path):
     (proj / "results").mkdir()
 
     subprocess.run(
-        [sys.executable, "-m", "pae", "run", "--agent", "mock",
+        [sys.executable, "-m", "cae", "run", "--agent", "mock",
          "--task", "tiny_task",
          "--tasks-dir", str(proj / "tasks"),
          "--results-dir", str(proj / "results")],
@@ -3310,7 +3310,7 @@ def test_aggregate_after_run(tmp_path, tiny_task_path):
 
     # report --format table should run cleanly
     r = subprocess.run(
-        [sys.executable, "-m", "pae", "report",
+        [sys.executable, "-m", "cae", "report",
          "--results-dir", str(proj / "results")],
         capture_output=True, text=True, timeout=30,
     )
@@ -3319,7 +3319,7 @@ def test_aggregate_after_run(tmp_path, tiny_task_path):
     # build-site should produce an index.html
     site_out = proj / "site"
     r2 = subprocess.run(
-        [sys.executable, "-m", "pae", "build-site",
+        [sys.executable, "-m", "cae", "build-site",
          "--results-dir", str(proj / "results"),
          "--out-dir", str(site_out)],
         capture_output=True, text=True, timeout=30,
@@ -3363,7 +3363,7 @@ git commit -m "Task 21: end-to-end integration test (full vertical slice)"
 from pathlib import Path
 from unittest.mock import patch, MagicMock
 
-from pae.docker_run import in_container, exec_in, run_in_container
+from cae.docker_run import in_container, exec_in, run_in_container
 
 
 def test_in_container_returns_true_when_dockerenv_exists(monkeypatch, tmp_path):
@@ -3478,7 +3478,7 @@ no code changes needed for this step.
 Append to `tests/test_cli.py`:
 
 ```python
-def test_pae_run_docker_flag_accepted(tmp_path, tiny_task_path):
+def test_cae_run_docker_flag_accepted(tmp_path, tiny_task_path):
     """`--docker` is accepted by argparse; the run will fail if `docker` is not
     on PATH. We mock `subprocess.run` to assert that the docker-runner branch
     is actually invoked (i.e., the harness called `docker run ...`)."""
@@ -3502,7 +3502,7 @@ def test_pae_run_docker_flag_accepted(tmp_path, tiny_task_path):
 
     with patch("subprocess.run", side_effect=fake_run):
         result = subprocess.run(
-            [sys.executable, "-m", "pae", "run", "--agent", "mock",
+            [sys.executable, "-m", "cae", "run", "--agent", "mock",
              "--task", "tiny_task", "--docker",
              "--tasks-dir", str(proj / "tasks"),
              "--results-dir", str(proj / "results")],

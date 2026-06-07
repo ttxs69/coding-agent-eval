@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from pae.agents.base import AgentResult, UsageInfo
+from cae.agents.base import AgentResult, UsageInfo
 
 
 MOCK_VERSION = "mock-0.1.0"

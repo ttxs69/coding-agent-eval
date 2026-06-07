@@ -3,9 +3,9 @@ import subprocess
 
 import pytest
 
-from pae.agents import ADAPTERS
-from pae.agents.mock import MockAdapter
-from pae.harness import run
+from cae.agents import ADAPTERS
+from cae.agents.mock import MockAdapter
+from cae.harness import run
 
 
 class _FixingMock(MockAdapter):

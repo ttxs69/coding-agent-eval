@@ -9,11 +9,11 @@ RUN npm install -g @anthropic-ai/claude-code@2.1.168 @openai/codex@0.137.0 2>&1 
 
 # Create a non-root user (Claude Code refuses to run as root).
 # Both agent CLIs and the harness need to be able to write under /work.
-RUN useradd --create-home --shell /bin/bash --uid 1000 pae
+RUN useradd --create-home --shell /bin/bash --uid 1000 cae
 
-USER pae
-WORKDIR /home/pae
-ENV HOME=/home/pae
+USER cae
+WORKDIR /home/cae
+ENV HOME=/home/cae
 
 # Sanity check
 RUN python3 --version && \

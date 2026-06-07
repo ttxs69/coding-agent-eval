@@ -17,7 +17,7 @@ Each `results/<run_id>.json` captures:
 Given a row, find the `agent` and the task list, then run:
 
 ```
-pae run --agent <agent> --task <task_id> [--docker]
+cae run --agent <agent> --task <task_id> [--docker]
 ```
 
 For the official leaderboard, always use `--docker` so the run is reproducible across machines. Without it, results depend on the local Python/library versions in the workdir.

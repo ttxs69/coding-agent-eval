@@ -5,9 +5,9 @@ Docker, in order of increasing task difficulty.
 
 ## Setup
 
-1. **Docker image:** `pae/eval:linux` (built from `Dockerfile.eval` in the repo root).
+1. **Docker image:** `cae/eval:linux` (built from `Dockerfile.eval` in the repo root).
    Python 3.11 + Node 20 + Claude Code CLI 2.1.168 + Codex CLI 0.137.0, all
-   installed as the `pae` user (uid 1000) so the agents don't refuse to run
+   installed as the `cae` user (uid 1000) so the agents don't refuse to run
    as root.
 2. **Auth:** Both agents' config/auth dirs are bind-mounted from the host
    into the container:
@@ -21,17 +21,17 @@ Docker, in order of increasing task difficulty.
 
 ```bash
 # Claude Code
-pae run --agent claude-code --task <id> \
+cae run --agent claude-code --task <id> \
     --tasks-dir tasks --results-dir results \
-    --docker --docker-image pae/eval:linux \
+    --docker --docker-image cae/eval:linux \
     --env-file env/auth.env
 
 # Codex
-pae run --agent codex --task <id> \
+cae run --agent codex --task <id> \
     --tasks-dir tasks --results-dir results \
-    --docker --docker-image pae/eval:linux \
+    --docker --docker-image cae/eval:linux \
     --docker-network host \
-    --docker-mount /tmp/codex-mount:/home/pae/.codex
+    --docker-mount /tmp/codex-mount:/home/cae/.codex
 ```
 
 ## Results
@@ -51,7 +51,7 @@ Both agents: **100% pass rate across all 3 difficulty levels in real docker mode
 
 1. **macOS binaries can't run in Linux container** — replaced with npm-installable
    Linux agents (the npm packages download the real Linux binaries).
-2. **Claude Code refuses to run as root** — Dockerfile creates a non-root `pae` user.
+2. **Claude Code refuses to run as root** — Dockerfile creates a non-root `cae` user.
 3. **Auth not passed to container** — `--env-file` for env vars; `--docker-mount`
    for files (e.g. codex's `auth.json`).
 4. **Network isolation blocks local proxies** — `--docker-network=host` lets
@@ -62,5 +62,5 @@ Both agents: **100% pass rate across all 3 difficulty levels in real docker mode
 ## Files in this directory
 
 - `Dockerfile.eval` — Dockerfile for the eval image
-- `pae/eval:linux` — built image (run `docker build -f Dockerfile.eval -t pae/eval:linux .`)
-- `pae run --docker*` — the CLI flags added in commit `3389d18`
+- `cae/eval:linux` — built image (run `docker build -f Dockerfile.eval -t cae/eval:linux .`)
+- `cae run --docker*` — the CLI flags added in commit `3389d18`

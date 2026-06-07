@@ -1,4 +1,4 @@
-"""Command-line interface for pae."""
+"""Command-line interface for cae."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ from pathlib import Path
 
 
 def cmd_run(args: argparse.Namespace) -> int:
-    from pae.harness import run
+    from cae.harness import run
     task_path = Path(args.tasks_dir) / args.task
     if not (task_path / "task.json").exists():
         print(f"error: task {args.task!r} not found at {task_path}", file=sys.stderr)
@@ -62,7 +62,7 @@ def cmd_add_task(args: argparse.Namespace) -> int:
     if not args.from_swebench:
         print("error: only --from-swebench is supported in v1", file=sys.stderr)
         return 2
-    from pae.importer import import_swebench_instance, load_swebench_records
+    from cae.importer import import_swebench_instance, load_swebench_records
     records = list(load_swebench_records(
         instance_ids=args.instance_id or None,
         split=args.split,
@@ -79,7 +79,7 @@ def cmd_add_task(args: argparse.Namespace) -> int:
 
 
 def cmd_list_agents(args: argparse.Namespace) -> int:
-    from pae.agents import list_adapters
+    from cae.agents import list_adapters
     rows = list_adapters()
     print(f"{'NAME':<20} AVAILABLE")
     for r in rows:
@@ -88,7 +88,7 @@ def cmd_list_agents(args: argparse.Namespace) -> int:
 
 
 def cmd_build_site(args: argparse.Namespace) -> int:
-    from pae.site import build_site
+    from cae.site import build_site
     build_site(
         results_dir=Path(args.results_dir),
         out_dir=Path(args.out_dir),
@@ -138,8 +138,8 @@ def _publish_site(out_dir: Path) -> int:
 
 
 def cmd_report(args: argparse.Namespace) -> int:
-    from pae.metrics import aggregate_results
-    from pae.render_table import render_table
+    from cae.metrics import aggregate_results
+    from cae.render_table import render_table
     rows = aggregate_results(Path(args.results_dir))
     if args.format == "table":
         headers = ["AGENT", "MODEL", "PASS RATE", "N", "MEDIAN COST", "MEDIAN DUR (s)", "LAST RUN"]
@@ -163,7 +163,7 @@ def cmd_report(args: argparse.Namespace) -> int:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="pae",
+        prog="cae",
         description="Evaluate CLI coding agents on SWE-bench tasks.",
     )
     parser.add_argument("--version", action="store_true", help="print version and exit")
@@ -189,7 +189,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_run.add_argument("--docker-network", default="bridge",
                       help="docker network mode (default: bridge). Use 'host' to give container access to host's localhost (e.g. for local LLM proxies).")
     p_run.add_argument("--docker-mount", default=None,
-                      help="comma-separated host_path:container_path pairs to bind-mount read-write, e.g. '~/.codex:/home/pae/.codex,~/.claude:/home/pae/.claude'. Used for agent auth dirs.")
+                      help="comma-separated host_path:container_path pairs to bind-mount read-write, e.g. '~/.codex:/home/cae/.codex,~/.claude:/home/cae/.claude'. Used for agent auth dirs.")
     p_run.set_defaults(func=cmd_run)
 
     p_add = sub.add_parser("add-task", help="add a new task under tasks/")

@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from pae.importer import import_swebench_instance, SWEbenchRecord
+from cae.importer import import_swebench_instance, SWEbenchRecord
 
 
 @pytest.fixture

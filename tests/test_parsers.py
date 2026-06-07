@@ -1,5 +1,5 @@
-from pae.parsers import parse_pytest_output
-from pae.agents.base import TestStatus
+from cae.parsers import parse_pytest_output
+from cae.agents.base import TestStatus
 
 
 def test_parse_pytest_all_pass():

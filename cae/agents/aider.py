@@ -12,12 +12,12 @@ import shutil
 import subprocess
 from pathlib import Path
 
-from pae.agents.base import AgentResult, UsageInfo
+from cae.agents.base import AgentResult, UsageInfo
 
 
 class AiderAdapter:
     name = "aider"
-    default_model = None  # aider uses the user's configured model; no pae default
+    default_model = None  # aider uses the user's configured model; no cae default
 
     def is_available(self) -> bool:
         return shutil.which("aider") is not None

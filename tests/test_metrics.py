@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from pae.metrics import aggregate_results
+from cae.metrics import aggregate_results
 
 
 @pytest.fixture
