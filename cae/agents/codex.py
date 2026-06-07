@@ -7,6 +7,7 @@ turn.completed event for cost/tokens/model.
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import subprocess
 from pathlib import Path
@@ -41,6 +42,27 @@ class CodexAdapter:
             cmd += ["-m", model]  # codex uses short -m for model
         return cmd
 
+    def _discover_model(self) -> str | None:
+        """Best-effort: try to read the model from codex's config.toml.
+
+        Codex doesn't expose the active model in its JSONL output. The most
+        reliable source is the user's config file (e.g.~/.codex/config.toml),
+        which has a `model = "..."` line. Falls back to default_model if
+        the config isn't readable (e.g. in a container without a mount).
+        """
+        try:
+            config_path = Path(
+                os.environ.get("CODEX_HOME", os.path.expanduser("~/.codex"))
+            ) / "config.toml"
+            if config_path.exists():
+                for line in config_path.read_text().splitlines():
+                    line = line.strip()
+                    if line.startswith("model = "):
+                        return line.split("=", 1)[1].strip().strip('"')
+        except Exception:
+            pass
+        return self.default_model
+
     def parse_output(self, stdout: str, stderr: str, exit_code: int) -> AgentResult:
         cost = None
         tokens_in = None
@@ -57,9 +79,13 @@ class CodexAdapter:
                     cost = usage.get("cost_usd")
                     tokens_in = usage.get("input_tokens")
                     tokens_out = usage.get("output_tokens")
-                    model = obj.get("model")
+                    # Model is not in turn.completed; try other places
+                    model = obj.get("model") or obj.get("model_id")
         except Exception:
             pass
+        # If no model found in output, read from codex's config
+        if model is None:
+            model = self._discover_model()
         return AgentResult(
             log=stdout + stderr,
             usage=UsageInfo(

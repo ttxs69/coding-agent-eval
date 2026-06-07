@@ -8,11 +8,22 @@ confirm the binary is on PATH.
 from __future__ import annotations
 
 import json
+import os
+import re
 import shutil
 import subprocess
 from pathlib import Path
 
 from cae.agents.base import AgentResult, UsageInfo
+
+# Claude Code emits terminal styling codes in its JSON modelUsage keys.
+# The codes may be full ANSI (\x1b[1m) or just the bracket portion ([1m]).
+# Strip both forms before recording the model name.
+_ANSI_RE = re.compile(r"(?:\x1b)?\[[0-9;]*[a-zA-Z]")
+
+
+def _strip_ansi(s: str) -> str:
+    return _ANSI_RE.sub("", s).strip()
 
 
 class ClaudeCodeAdapter:
@@ -44,6 +55,35 @@ class ClaudeCodeAdapter:
             cmd += ["--model", model]
         return cmd
 
+    def _discover_model(self) -> str | None:
+        """Best-effort: read the model from Claude Code's config.
+
+        Prefers the ANTHROPIC_MODEL env var (set in the harness's container or
+        host env), then falls back to ~/.claude/settings.json. This is more
+        reliable than the modelUsage key in Claude's JSON output, which may
+        contain ANSI terminal styling codes.
+        """
+        # 1. Check env var (set by the harness via --env-file or host env)
+        from_env = os.environ.get("ANTHROPIC_MODEL")
+        if from_env:
+            return from_env
+
+        # 2. Check settings.json
+        try:
+            settings_path = Path(
+                os.environ.get("CLAUDE_CONFIG_DIR", os.path.expanduser("~/.claude"))
+            ) / "settings.json"
+            if settings_path.exists():
+                settings = json.loads(settings_path.read_text())
+                env_block = settings.get("env", {})
+                model = env_block.get("ANTHROPIC_MODEL")
+                if model:
+                    return model
+        except Exception:
+            pass
+
+        return None
+
     def parse_output(self, stdout: str, stderr: str, exit_code: int) -> AgentResult:
         cost = None
         tokens_in = None
@@ -66,15 +106,18 @@ class ClaudeCodeAdapter:
                 # The model name lives under modelUsage.{name} in real output.
                 model_usage = envelope.get("modelUsage") or {}
                 if model_usage and not model:
-                    model = next(iter(model_usage.keys()), None)
+                    raw_name = next(iter(model_usage.keys()), None)
+                    if raw_name is not None:
+                        model = _strip_ansi(raw_name)
                 # Tokens live at envelope.usage.{input,output}_tokens, but
                 # cache_read_input_tokens also contributes to cost.
                 usage = envelope.get("usage") or {}
                 tokens_in = usage.get("input_tokens")
                 tokens_out = usage.get("output_tokens")
                 if model is None:
-                    # last-ditch: check if model name is on the envelope itself
                     model = envelope.get("model")
+            if model is None:
+                model = self._discover_model()
         except Exception:
             pass
         return AgentResult(
