@@ -2593,7 +2593,6 @@ from __future__ import annotations
 
 import html
 import json
-import shutil
 from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
@@ -2613,20 +2612,34 @@ def _harness_sha() -> str:
         return "unknown"
 
 
+def _fmt_cost(v):
+    return f"${v:.2f}" if v is not None else "$?"
+
+
+def _fmt_dur(v):
+    return f"{v:.0f}s" if v is not None else "?"
+
+
+def _fmt_int(v):
+    return f"{v:.0f}" if v is not None else "?"
+
+
 def _index_html(rows: list[dict], harness_sha: str) -> str:
     rows_html = "\n".join(
         f"<tr><td>{html.escape(r['agent'])}</td>"
         f"<td>{html.escape(str(r['model'] or ''))}</td>"
         f"<td>{r['pass_rate']*100:.0f}%</td>"
         f"<td>{r['n_attempted']}</td>"
-        f"<td>{'$' + format(r['median_cost_usd'], '.2f') if r['median_cost_usd'] is not None else '$?'}</td>"
+        f"<td>{_fmt_cost(r['median_cost_usd'])}</td>"
+        f"<td>{_fmt_dur(r.get('median_duration_sec'))}</td>"
+        f"<td>{_fmt_int((r.get('median_tokens_in') or 0) + (r.get('median_tokens_out') or 0))}</td>"
         f"<td>{r['last_run']}</td></tr>"
         for r in rows
     )
     return f"""<!doctype html>
 <html><head><meta charset="utf-8"><title>pae leaderboard</title>
 <style>
-body {{ font: 14px/1.4 system-ui, sans-serif; max-width: 1100px; margin: 2em auto; padding: 0 1em; }}
+body {{ font: 14px/1.4 system-ui, sans-serif; max-width: 1200px; margin: 2em auto; padding: 0 1em; }}
 table {{ border-collapse: collapse; width: 100%; }}
 th, td {{ padding: 6px 10px; text-align: left; border-bottom: 1px solid #ddd; }}
 th {{ background: #f5f5f5; cursor: pointer; }}
@@ -2642,7 +2655,11 @@ footer {{ margin-top: 2em; color: #888; font-size: 12px; }}
 <h1>pae leaderboard</h1>
 <p>Public, reproducible benchmark of CLI coding agents on SWE-bench Verified.</p>
 <table id="lb">
-<thead><tr><th>Agent</th><th>Model</th><th>Pass rate</th><th># tasks</th><th>Median cost</th><th>Last run</th></tr></thead>
+<thead><tr>
+  <th>Agent</th><th>Model</th><th>Pass rate</th><th># tasks</th>
+  <th>Median cost</th><th>Median time</th><th>Median tokens (in+out)</th>
+  <th>Last run</th>
+</tr></thead>
 <tbody>
 {rows_html}
 </tbody>
@@ -2667,11 +2684,14 @@ document.querySelectorAll('th').forEach((th, i) => {{
 def _task_html(task_id: str, results: list[dict]) -> str:
     sections = []
     for r in results:
+        # Defensive: `usage` may be missing or null in some result JSONs.
+        usage = r.get("usage") or {}
+        cost = usage.get("cost_usd")
         sections.append(f"""<details>
 <summary><strong>{html.escape(r['agent'])}</strong> — {html.escape(r['status'])}</summary>
 <p>Model: <code>{html.escape(str(r.get('model') or ''))}</code> &middot;
    Duration: {r.get('duration_sec', 0):.0f}s &middot;
-   Cost: {'$' + format(r['usage'].get('cost_usd'), '.2f') if r.get('usage', {}).get('cost_usd') is not None else '$?'}</p>
+   Cost: {_fmt_cost(cost)}</p>
 <pre><code>{html.escape(r.get('patch', ''))}</code></pre>
 </details>""")
     return f"""<!doctype html>
