@@ -150,6 +150,8 @@ def run(
     docker: bool = False,
     docker_image: str = "python:3.11-slim",
     env_file: Path | None = None,
+    docker_network: str = "bridge",
+    docker_extra_mounts: list[tuple[str, str]] | None = None,
     repeat: int = 1,
     repeat_index: int | None = None,
 ) -> dict:
@@ -213,7 +215,12 @@ def run(
     # (e.g. `pip install pytest` in setup_cmd) persists to test_cmd.
     if docker:
         from pae.docker_run import Container
-        container = Container(docker_image, workdir, env_file=env_file)
+        container = Container(
+            docker_image, workdir,
+            env_file=env_file,
+            network=docker_network,
+            extra_mounts=docker_extra_mounts,
+        )
     else:
         container = None
 

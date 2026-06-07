@@ -91,22 +91,40 @@ class Container:
         workdir: Path,
         *,
         env_file: Path | None = None,
+        network: str | None = None,
+        extra_mounts: list[tuple[str, str]] | None = None,
     ):
+        """
+        Args:
+            image: docker image name to run.
+            workdir: host directory to bind-mount at /work.
+            env_file: file with KEY=VALUE lines passed via --env-file.
+            network: docker network mode ('host' for host networking, 'bridge'
+                for default, etc.). Default 'bridge'.
+            extra_mounts: list of (host_path, container_path) pairs to bind-mount
+                read-write. Used for things like codex's auth directory which
+                must be present inside the container.
+        """
         self.image = image
         self.workdir = workdir
         self.env_file = env_file
+        self.network = network or "bridge"
+        self.extra_mounts = extra_mounts or []
         self.container_id: str | None = None
         self._start()
 
     def _start(self) -> None:
         args = [
             "docker", "run", "-d", "--rm",
+            f"--network={self.network}",
             "-v", f"{self.workdir.resolve()}:/work",
             "-w", "/work",
             "--label", "pae.managed=true",
         ]
         if self.env_file:
             args += ["--env-file", str(self.env_file)]
+        for host_path, container_path in self.extra_mounts:
+            args += ["-v", f"{host_path}:{container_path}:rw"]
         # Long-running container; we exec into it. `sleep infinity` keeps it
         # alive between our execs and is killed by `--rm` on container exit.
         # Use the image's default PATH (don't inherit host's PATH which may

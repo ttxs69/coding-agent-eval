@@ -46,6 +46,8 @@ def cmd_run(args: argparse.Namespace) -> int:
             docker=args.docker,
             docker_image=args.docker_image,
             env_file=Path(args.env_file) if args.env_file else None,
+            docker_network=args.docker_network,
+            docker_extra_mounts=[tuple(m.split(":", 1)) for m in args.docker_mount.split(",")] if args.docker_mount else None,
             repeat=repeat,
             repeat_index=repeat_index,
         )
@@ -184,6 +186,10 @@ def build_parser() -> argparse.ArgumentParser:
                       help="base image for --docker mode (default: python:3.11-slim)")
     p_run.add_argument("--env-file", default=None,
                       help="file with KEY=VALUE lines, passed to `docker run --env-file` (for API keys)")
+    p_run.add_argument("--docker-network", default="bridge",
+                      help="docker network mode (default: bridge). Use 'host' to give container access to host's localhost (e.g. for local LLM proxies).")
+    p_run.add_argument("--docker-mount", default=None,
+                      help="comma-separated host_path:container_path pairs to bind-mount read-write, e.g. '~/.codex:/home/pae/.codex,~/.claude:/home/pae/.claude'. Used for agent auth dirs.")
     p_run.set_defaults(func=cmd_run)
 
     p_add = sub.add_parser("add-task", help="add a new task under tasks/")
