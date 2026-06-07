@@ -87,7 +87,12 @@ def import_swebench_instance(
         "test_cmd": defaults["test_cmd"],
         "fail_to_pass": record.fail_to_pass,
         "pass_to_pass": record.pass_to_pass,
-        "source": {"kind": "swe-bench", "split": split, "original_id": record.instance_id},
+        "source": {
+            "kind": "swe-bench",
+            "split": split,
+            "original_id": record.instance_id,
+            "swe_bench_commit": get_swe_bench_dataset_version(),
+        },
     }
     (task_dir / "task.json").write_text(json.dumps(task_json, indent=2))
 
@@ -142,3 +147,25 @@ def load_swebench_records(
             fail_to_pass=row["FAIL_TO_PASS"],
             pass_to_pass=row["PASS_TO_PASS"],
         )
+
+
+_swe_bench_version_cache: str | None = None
+
+
+def get_swe_bench_dataset_version() -> str:
+    """Return the SWE-bench dataset's HuggingFace revision SHA (cached).
+
+    Queried from huggingface_hub on first call; subsequent calls return the
+    cached value. Falls back to "unknown" if the network is unavailable.
+    """
+    global _swe_bench_version_cache
+    if _swe_bench_version_cache is not None:
+        return _swe_bench_version_cache
+    try:
+        from huggingface_hub import HfApi
+        info = HfApi().dataset_info("princeton-nlp/SWE-bench_Verified")
+        sha = getattr(info, "sha", None) or "unknown"
+    except Exception:
+        sha = "unknown"
+    _swe_bench_version_cache = sha
+    return sha

@@ -4,7 +4,6 @@ import json
 import shutil
 import subprocess
 import sys
-from pathlib import Path
 
 
 def test_full_vertical_slice_replay(tmp_path, tiny_task_path):

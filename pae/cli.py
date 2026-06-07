@@ -93,6 +93,45 @@ def cmd_build_site(args: argparse.Namespace) -> int:
         docs_dir=Path(args.docs_dir) if args.docs_dir else None,
     )
     print(f"wrote site to {args.out_dir}")
+    if args.publish:
+        return _publish_site(Path(args.out_dir))
+    return 0
+
+
+def _publish_site(out_dir: Path) -> int:
+    """Deploy the built site to GitHub Pages via the `gh` CLI.
+
+    Pushes the contents of `out_dir` to a `gh-pages` branch using `git subtree`
+    (works without any extra setup) and then uses `gh` to enable Pages on
+    that branch. Returns 0 on success, non-zero on any failure.
+    """
+    import shutil
+    import subprocess
+
+    gh = shutil.which("gh")
+    if gh is None:
+        print("error: --publish requires the `gh` CLI on PATH", file=sys.stderr)
+        return 2
+
+    if not (out_dir / "index.html").exists():
+        print(f"error: {out_dir} does not look like a built site (no index.html)", file=sys.stderr)
+        return 2
+
+    # Use git subtree push to publish out_dir to gh-pages branch.
+    result = subprocess.run(
+        ["git", "subtree", "push", "--prefix", str(out_dir), "origin", "gh-pages"],
+        capture_output=True, text=True,
+    )
+    if result.returncode != 0:
+        print(f"error: git subtree push failed: {result.stderr.strip()}", file=sys.stderr)
+        return result.returncode
+
+    # Enable Pages on the gh-pages branch if not already.
+    subprocess.run(
+        [gh, "repo", "edit", "--enable-pages", "--pages-source", "gh-pages"],
+        capture_output=True, text=True,
+    )
+    print(f"published {out_dir} to gh-pages branch")
     return 0
 
 

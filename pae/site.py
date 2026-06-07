@@ -147,6 +147,16 @@ def build_site(results_dir: Path, out_dir: Path, docs_dir: Path | None = None) -
     for task_id, results in by_task.items():
         (out_dir / "tasks" / f"{task_id}.html").write_text(_task_html(task_id, results))
 
+    # 4. Per-run detail JSONs (consumed by the per-task pages or external tools)
+    details_dir = out_dir / "data" / "details"
+    details_dir.mkdir(exist_ok=True)
+    for f in sorted(results_dir.glob("*.json")):
+        data = json.loads(f.read_text())
+        if data.get("agent") == "mock":
+            continue
+        out_name = f"{data['task_id']}__{data['agent']}.json"
+        (details_dir / out_name).write_text(json.dumps(data, indent=2, default=str))
+
     # 4. Reproducibility doc (if source present)
     if docs_dir and (docs_dir / "reproducibility.md").exists():
         from pae.render_markdown import render_markdown

@@ -1,7 +1,7 @@
 from pathlib import Path
 from unittest.mock import patch, MagicMock
 
-from pae.docker_run import in_container, exec_in, run_in_container
+from pae.docker_run import in_container, exec_in
 
 
 def test_in_container_returns_true_when_dockerenv_exists(monkeypatch, tmp_path):

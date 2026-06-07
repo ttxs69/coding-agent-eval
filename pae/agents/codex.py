@@ -11,7 +11,7 @@ import shutil
 import subprocess
 from pathlib import Path
 
-from pae.agents.base import AgentAdapter, AgentResult, UsageInfo
+from pae.agents.base import AgentResult, UsageInfo
 
 
 class CodexAdapter:

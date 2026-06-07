@@ -13,7 +13,7 @@ import shutil
 import sys
 from pathlib import Path
 
-from pae.agents.base import AgentAdapter, AgentResult, UsageInfo
+from pae.agents.base import AgentResult, UsageInfo
 
 
 MOCK_VERSION = "mock-0.1.0"

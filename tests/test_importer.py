@@ -1,6 +1,5 @@
 import json
 from pathlib import Path
-from unittest.mock import patch
 
 import pytest
 
@@ -30,7 +29,11 @@ def test_import_writes_task_json(tmp_path, sample_record):
     assert data["base_commit"] == "abc1234"
     assert data["fail_to_pass"] == ["tests/test_x.py::test_y"]
     assert data["prompt"] == "Issue: something is broken"
-    assert data["source"] == {"kind": "swe-bench", "split": "verified", "original_id": "django__django-12345"}
+    assert data["source"]["kind"] == "swe-bench"
+    assert data["source"]["split"] == "verified"
+    assert data["source"]["original_id"] == "django__django-12345"
+    # swe_bench_commit may be a real SHA (HF available) or "unknown" (no network)
+    assert "swe_bench_commit" in data["source"]
 
 
 def test_import_writes_test_patch(tmp_path, sample_record):
