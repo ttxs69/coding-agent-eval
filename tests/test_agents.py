@@ -1,10 +1,9 @@
-import shutil
+import subprocess
 from pathlib import Path
 
 import pytest
 
 from pae.agents import get_adapter, list_adapters
-from pae.agents.base import AgentResult, UsageInfo
 from pae.agents.mock import MockAdapter
 
 
@@ -22,12 +21,11 @@ def test_mock_adapter_build_command_runs_a_subprocess():
     assert cmd[0]  # non-empty argv
 
 
-def test_mock_adapter_writes_patch_to_workdir(tmp_path: Path):
-    """The mock writes a known patch to the workdir; the harness then captures it via git diff."""
+def test_mock_adapter_does_not_modify_workdir(tmp_path: Path):
+    """The default mock is a no-op. Running its command in a git-initialized
+    workdir should leave the workdir unchanged (no diff after the run)."""
     workdir = tmp_path / "workdir"
     workdir.mkdir()
-    # set up workdir as a git repo with one initial file
-    import subprocess
     subprocess.run(["git", "init", "-q"], cwd=workdir, check=True)
     subprocess.run(["git", "config", "user.email", "test@x"], cwd=workdir, check=True)
     subprocess.run(["git", "config", "user.name", "t"], cwd=workdir, check=True)
@@ -36,9 +34,6 @@ def test_mock_adapter_writes_patch_to_workdir(tmp_path: Path):
     subprocess.run(["git", "commit", "-q", "-m", "init"], cwd=workdir, check=True)
 
     adapter = MockAdapter()
-    # by default the mock does nothing — calling its command in workdir should not change files
-    # to verify: run a no-op, then assert no diff
-    import subprocess
     cmd = adapter.build_command(workdir, "fix the bug", model=None)
     subprocess.run(cmd, cwd=workdir, check=True, capture_output=True)
     diff = subprocess.run(["git", "diff"], cwd=workdir, capture_output=True, text=True)
