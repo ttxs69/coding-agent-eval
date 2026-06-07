@@ -16,12 +16,15 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 
-# Ensure `python` is on PATH for subprocess calls. macOS only has `python3` on the
-# default PATH; without this, test_cmd strings like `python -m pytest ...` fail
-# with "command not found" when run via `subprocess.run(..., shell=True)`.
-_venv_bin = Path(sys.executable).parent
-if str(_venv_bin) not in os.environ.get("PATH", "").split(os.pathsep):
-    os.environ["PATH"] = f"{_venv_bin}{os.pathsep}{os.environ.get('PATH', '')}"
+# Ensure `python` is on PATH for LOCAL subprocess calls. macOS only has `python3`
+# on the default PATH; without this, test_cmd strings like `python -m pytest ...`
+# fail with "command not found" when run via `subprocess.run(..., shell=True)`.
+# This is ONLY needed for local mode — in docker mode the container has its own
+# python, and prepending the host's venv path would break the container.
+if "pae_skip_path_setup" not in os.environ:
+    _venv_bin = Path(sys.executable).parent
+    if str(_venv_bin) not in os.environ.get("PATH", "").split(os.pathsep):
+        os.environ["PATH"] = f"{_venv_bin}{os.pathsep}{os.environ.get('PATH', '')}"
 
 from pae.agents import get_adapter  # noqa: E402
 from pae.agents.base import Status, TestStatus  # noqa: E402
@@ -205,16 +208,20 @@ def run(
                        f"could not apply tests.patch — workdir is empty (use --fetch-fresh or "
                        f"run without --no-fetch-repo). Patch: {task_dir / 'tests.patch'}")
 
-    # Pick a subprocess runner: local (default) or docker (Task 22).
+    # Pick a subprocess runner: local (default) or docker (one container, multiple execs).
+    # In docker mode, start ONE container and exec into it for each step so state
+    # (e.g. `pip install pytest` in setup_cmd) persists to test_cmd.
+    if docker:
+        from pae.docker_run import Container
+        container = Container(docker_image, workdir, env_file=env_file)
+    else:
+        container = None
+
     def run_step(cmd, cwd, timeout):
-        if docker:
-            from pae.docker_run import exec_in
-            return exec_in(
-                docker_image,
+        if container is not None:
+            return container.run(
                 cmd if isinstance(cmd, list) else cmd.split(),
-                workdir=cwd,
                 timeout=timeout,
-                env_file=env_file,
             )
         return _run_subprocess(cmd, cwd, timeout=timeout)
 

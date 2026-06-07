@@ -9,8 +9,6 @@ workdir before calling harness.run.
 
 from __future__ import annotations
 
-import shutil
-import sys
 from pathlib import Path
 
 from pae.agents.base import AgentResult, UsageInfo
@@ -30,13 +28,10 @@ class MockAdapter:
         return MOCK_VERSION
 
     def build_command(self, workdir: Path, prompt: str, *, model: str | None) -> list[str]:
-        # The mock does its work in the constructor of the subprocess via a small
-        # Python one-liner. We pass the workdir as the only arg. The "agent" is
-        # no-op for the default mock — the harness then sees a clean diff.
-        # Use sys.executable as the ultimate fallback so the mock works on systems
-        # (e.g. macOS) where `python` is not in PATH but only `python3` is.
-        python = shutil.which("python") or shutil.which("python3") or sys.executable
-        return [python, "-c", "import sys; sys.exit(0)"]
+        # Use `python3` (not a host-resolved path) so this works in both local
+        # mode (the harness prepends the venv bin to PATH, which has python3)
+        # and docker mode (the container has its own /usr/local/bin/python3).
+        return ["python3", "-c", "import sys; sys.exit(0)"]
 
     def parse_output(self, stdout: str, stderr: str, exit_code: int) -> AgentResult:
         return AgentResult(
