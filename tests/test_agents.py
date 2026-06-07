@@ -83,3 +83,26 @@ def test_claude_code_parse_output_extracts_usage():
     assert result.usage.tokens_in == 100
     assert result.usage.tokens_out == 50
     assert result.usage.model == "claude-opus-4-7"
+
+
+def test_codex_adapter_build_command_includes_prompt():
+    from pae.agents.codex import CodexAdapter
+    cmd = CodexAdapter().build_command(Path("/tmp/x"), "do the thing", model=None)
+    assert cmd[0] == "codex"
+    assert any("do the thing" in str(arg) for arg in cmd)
+    # codex uses --json for parseable output
+    assert any("json" in str(arg) for arg in cmd)
+
+
+def test_codex_parse_output_extracts_usage():
+    from pae.agents.codex import CodexAdapter
+    fake = json.dumps({
+        "type": "turn.completed",
+        "usage": {"input_tokens": 200, "output_tokens": 80, "cost_usd": 0.05},
+        "model": "gpt-5",
+    })
+    result = CodexAdapter().parse_output(fake, "", 0)
+    assert result.usage.cost_usd == 0.05
+    assert result.usage.tokens_in == 200
+    assert result.usage.tokens_out == 80
+    assert result.usage.model == "gpt-5"

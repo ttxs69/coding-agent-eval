@@ -6,11 +6,13 @@ import their class and add an entry here.
 
 from pae.agents.base import AgentAdapter
 from pae.agents.claude_code import ClaudeCodeAdapter
+from pae.agents.codex import CodexAdapter
 from pae.agents.mock import MockAdapter
 
 ADAPTERS: dict[str, type[AgentAdapter]] = {
     "mock": MockAdapter,
     "claude-code": ClaudeCodeAdapter,
+    "codex": CodexAdapter,
 }
 
 
