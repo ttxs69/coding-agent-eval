@@ -7,12 +7,21 @@ is added in Phase 5 (Task 22). Steps 1-11 follow the spec section "Run Lifecycle
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import subprocess
+import sys
 import tempfile
 import time
 from datetime import datetime, timezone
 from pathlib import Path
+
+# Ensure `python` is on PATH for subprocess calls. macOS only has `python3` on the
+# default PATH; without this, test_cmd strings like `python -m pytest ...` fail
+# with "command not found" when run via `subprocess.run(..., shell=True)`.
+_venv_bin = Path(sys.executable).parent
+if str(_venv_bin) not in os.environ.get("PATH", "").split(os.pathsep):
+    os.environ["PATH"] = f"{_venv_bin}{os.pathsep}{os.environ.get('PATH', '')}"
 
 from pae.agents import get_adapter
 from pae.agents.base import Status, TestStatus
@@ -54,16 +63,37 @@ def _ensure_git_repo(workdir: Path) -> None:
     subprocess.run(["git", "init", "-q"], cwd=workdir, check=True)
     subprocess.run(["git", "config", "user.email", "pae@local"], cwd=workdir, check=True)
     subprocess.run(["git", "config", "user.name", "pae"], cwd=workdir, check=True)
-    subprocess.run(["git", "add", "."], cwd=workdir, check=True)
-    subprocess.run(["git", "commit", "-q", "-m", "initial"], cwd=workdir, check=True)
+    # If workdir is empty except for .git (e.g., --no-fetch-repo or a SWE-bench
+    # task that imported without a repo/), `git add .` is a no-op and `git commit`
+    # would fail with "nothing to commit". Make an empty initial commit so
+    # subsequent git operations (diff, status) work even on empty workdirs.
+    non_git_entries = [p for p in workdir.iterdir() if p.name != ".git"]
+    if not non_git_entries:
+        subprocess.run(["git", "commit", "--allow-empty", "-q", "-m", "initial"],
+                       cwd=workdir, check=True)
+    else:
+        subprocess.run(["git", "add", "."], cwd=workdir, check=True)
+        subprocess.run(["git", "commit", "-q", "-m", "initial"], cwd=workdir, check=True)
 
 
-def _apply_test_patch(workdir: Path, task_dir: Path) -> None:
-    """Apply tests.patch if it exists. No-op for hand-authored tasks."""
+def _apply_test_patch(workdir: Path, task_dir: Path) -> bool:
+    """Apply tests.patch if it exists. No-op for hand-authored tasks.
+
+    Returns True if the patch was applied (or didn't exist), False if it
+    failed to apply. Failure typically means the workdir doesn't have the
+    repo source (e.g., --no-fetch-repo on a SWE-bench task).
+    """
     patch = task_dir / "tests.patch"
     if not patch.exists():
-        return
-    subprocess.run(["git", "apply", str(patch)], cwd=workdir, check=True)
+        return True
+    # Resolve the patch path to absolute so git can find it regardless of cwd.
+    # (git apply runs with cwd=workdir, so a relative patch path would be
+    # resolved against the workdir, not the original task location.)
+    proc = subprocess.run(
+        ["git", "apply", str(patch.resolve())],
+        cwd=workdir, capture_output=True, text=True,
+    )
+    return proc.returncode == 0
 
 
 def _run_tests(cmd: str, workdir: Path, timeout: int, run_subprocess=_run_subprocess) -> dict[str, TestStatus]:
@@ -94,9 +124,11 @@ def _git_sha_cached() -> str:
     global _git_sha_cache
     try:
         if _git_sha_cache is None:
-            _git_sha_cache = subprocess.check_output(
-                ["git", "rev-parse", "--short", "HEAD"], text=True
-            ).strip()
+            proc = subprocess.run(
+                ["git", "rev-parse", "--short", "HEAD"],
+                capture_output=True, text=True, check=True,
+            )
+            _git_sha_cache = proc.stdout.strip()
         return _git_sha_cache
     except Exception:
         return "unknown"
@@ -168,7 +200,10 @@ def run(
                         shutil.copy2(child, dest)
 
     _ensure_git_repo(workdir)
-    _apply_test_patch(workdir, task_dir)
+    if not _apply_test_patch(workdir, task_dir):
+        return _result(task, agent_name, mode, Status.TASK_ERROR, "unknown", {}, {}, "", str(workdir),
+                       f"could not apply tests.patch — workdir is empty (use --fetch-fresh or "
+                       f"run without --no-fetch-repo). Patch: {task_dir / 'tests.patch'}")
 
     # Pick a subprocess runner: local (default) or docker (Task 22).
     def run_step(cmd, cwd, timeout):

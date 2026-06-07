@@ -25,7 +25,11 @@ def _now_iso() -> str:
 def _harness_sha() -> str:
     import subprocess
     try:
-        return subprocess.check_output(["git", "rev-parse", "--short", "HEAD"], text=True).strip()
+        proc = subprocess.run(
+            ["git", "rev-parse", "--short", "HEAD"],
+            capture_output=True, text=True, check=True, cwd=Path(__file__).resolve().parent.parent.parent,
+        )
+        return proc.stdout.strip()
     except Exception:
         return "unknown"
 
