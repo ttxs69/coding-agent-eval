@@ -79,10 +79,12 @@ Goal: a working end-to-end `pae run` with the mock adapter against a tiny in-rep
 - Create: `pyproject.toml`
 - Create: `pae/__init__.py`
 - Create: `pae/cli.py`
+- Create: `pae/__main__.py` (enables `python -m pae`)
 - Create: `tests/__init__.py`
 - Create: `tests/test_cli.py`
 - Create: `results/.gitkeep`
 - Create: `README.md`
+- Create: `.gitignore`
 
 - [ ] **Step 1: Write the failing test**
 
@@ -142,6 +144,11 @@ addopts = "-ra"
 [tool.ruff]
 line-length = 100
 target-version = "py311"
+
+[tool.pyright]
+include = ["pae", "tests"]
+pythonVersion = "3.11"
+venv = ".venv"
 ```
 
 - [ ] **Step 4: Create `pae/__init__.py`**
@@ -185,12 +192,33 @@ if __name__ == "__main__":
     sys.exit(main())
 ```
 
+- [ ] **Step 5b: Create `pae/__main__.py`**
+
+```python
+"""Allow `python -m pae` to invoke the CLI."""
+
+from pae.cli import main
+
+raise SystemExit(main())
+```
+
 - [ ] **Step 6: Create `tests/__init__.py` (empty)**
 
 ```python
 ```
 
 - [ ] **Step 7: Create `results/.gitkeep` (empty file)**
+
+- [ ] **Step 7b: Create `.gitignore`**
+
+```
+.venv/
+*.egg-info/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+```
 
 ```
 ```
@@ -231,8 +259,8 @@ Expected: PASS
 - [ ] **Step 11: Commit**
 
 ```bash
-git add pyproject.toml pae/__init__.py pae/cli.py tests/__init__.py tests/test_cli.py results/.gitkeep README.md
-git commit -m "Task 1: project skeleton (pyproject, CLI, package init)"
+git add pyproject.toml pae/__init__.py pae/cli.py pae/__main__.py tests/__init__.py tests/test_cli.py results/.gitkeep README.md .gitignore
+git commit -m "Task 1: project skeleton (pyproject, CLI, package init, __main__)"
 ```
 
 ---
@@ -248,8 +276,6 @@ git commit -m "Task 1: project skeleton (pyproject, CLI, package init)"
 
 ```python
 # tests/test_status.py
-import pytest
-
 from pae.agents.base import Status, TestStatus
 
 
@@ -319,6 +345,9 @@ class Status(StrEnum):
 
 class TestStatus(StrEnum):
     """Per-test status (the spec's 5-value enum)."""
+
+    # Tell pytest not to treat this as a test class (it starts with "Test").
+    __test__ = False
 
     PASSED = "passed"
     FAILED = "failed"
@@ -989,12 +1018,10 @@ is added in Phase 5 (Task 22). Steps 1-11 follow the spec section "Run Lifecycle
 from __future__ import annotations
 
 import json
-import os
 import shutil
 import subprocess
 import tempfile
 import time
-import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -1050,12 +1077,15 @@ def _apply_test_patch(workdir: Path, task_dir: Path) -> None:
     subprocess.run(["git", "apply", str(patch)], cwd=workdir, check=True)
 
 
-def _run_tests(cmd: str, workdir: Path, timeout: int) -> dict[str, TestStatus]:
+def _run_tests(cmd: str, workdir: Path, timeout: int, run_subprocess=_run_subprocess) -> dict[str, TestStatus]:
     """Run a test command and parse its output via the pytest parser.
+
+    `run_subprocess` is the (cmd, cwd, timeout) -> (rc, stdout, stderr, dur) callable.
+    Defaults to the local-mode `_run_subprocess`; Task 22 swaps in a docker dispatcher.
 
     Returns {nodeid: TestStatus}.
     """
-    exit_code, stdout, stderr, _ = _run_subprocess(cmd, workdir, timeout=timeout)
+    exit_code, stdout, stderr, _ = run_subprocess(cmd, workdir, timeout=timeout)
     if exit_code not in (0, 1, 2, 3, 4, 5):  # pytest uses 0-5
         return {}
     return parse_pytest_output(stdout + "\n" + stderr)
@@ -1066,6 +1096,13 @@ def run(
     agent_name: str,
     workdir: Path | None = None,
     timeout_sec: int = 1800,
+    fetch_fresh: bool = False,
+    keep_workdir: bool = False,
+    docker: bool = False,
+    docker_image: str = "python:3.11-slim",
+    env_file: Path | None = None,
+    repeat: int = 1,
+    repeat_index: int | None = None,
 ) -> dict:
     """Run a single (task, agent) pair through the full harness. Return the result dict.
 
@@ -1074,6 +1111,9 @@ def run(
         agent_name: name of a registered adapter (e.g. "mock", "claude-code").
         workdir: optional pre-populated workdir. If None, harness copies from task_path/repo/.
         timeout_sec: per-stage timeout (setup, pre-flight, agent, grading).
+        repeat: total number of times this run is being repeated (1 = no repeat).
+        repeat_index: 1-based index of this specific run within a repeated batch.
+            When `repeat=1`, this is None and the run_id omits the suffix.
 
     Returns a dict matching the spec's Output JSON shape.
     """
@@ -1102,39 +1142,52 @@ def run(
     _ensure_git_repo(workdir)
     _apply_test_patch(workdir, task_dir)
 
+    # Pick a subprocess runner: local (default) or docker (Task 22).
+    def run_step(cmd, cwd, timeout):
+        if docker:
+            from pae.docker_run import exec_in
+            return exec_in(
+                docker_image,
+                cmd if isinstance(cmd, list) else cmd.split(),
+                workdir=cwd,
+                timeout=timeout,
+                env_file=env_file,
+            )
+        return _run_subprocess(cmd, cwd, timeout=timeout)
+
     # 5: Setup
     if task.get("setup_cmd"):
-        setup_rc, _, setup_err, _ = _run_subprocess(task["setup_cmd"], workdir, timeout=timeout_sec)
+        setup_rc, _, setup_err, _ = run_step(task["setup_cmd"], workdir, timeout=timeout_sec)
         if setup_rc != 0:
-            return _result(task, agent_name, "local", Status.TASK_ERROR, "local", {}, {}, "", str(workdir),
+            return _result(task, agent_name, "local", Status.TASK_ERROR, "unknown", {}, {}, "", str(workdir),
                            f"setup_cmd failed: {setup_err[:200]}")
 
     # 6: Pre-flight
-    pre = _run_tests(task["test_cmd"], workdir, timeout=timeout_sec)
+    pre = _run_tests(task["test_cmd"], workdir, timeout=timeout_sec, run_subprocess=run_step)
     pre_flight = {"fail_to_pass": {n: pre.get(n, TestStatus.ERROR).value for n in fail_to_pass},
                   "pass_to_pass": {n: pre.get(n, TestStatus.ERROR).value for n in pass_to_pass}}
     # validate: fail_to_pass tests should currently fail, pass_to_pass should currently pass
     pre_fails_correctly = all(pre_flight["fail_to_pass"][n] != "passed" for n in fail_to_pass)
     pre_passes_correctly = all(pre_flight["pass_to_pass"][n] == "passed" for n in pass_to_pass)
     if not (pre_fails_correctly and pre_passes_correctly):
-        return _result(task, agent_name, "local", Status.TASK_ERROR, "local", pre_flight, pre_flight, "",
+        return _result(task, agent_name, "local", Status.TASK_ERROR, "unknown", pre_flight, pre_flight, "",
                        str(workdir), "pre-flight validation failed: fail_to_pass tests do not all fail, "
                        "or pass_to_pass tests do not all pass")
 
     # 7: Run agent
     adapter = get_adapter(agent_name)
     if not adapter.is_available():
-        return _result(task, agent_name, "local", Status.AGENT_ERROR, "local", pre_flight, pre_flight, "",
+        return _result(task, agent_name, "local", Status.AGENT_ERROR, "unknown", pre_flight, pre_flight, "",
                        str(workdir), f"agent {agent_name} not available")
     agent_version = adapter.version()
     cmd = adapter.build_command(workdir, task["prompt"], model=None)
-    agent_rc, agent_stdout, agent_stderr, duration = _run_subprocess(cmd, workdir, timeout=timeout_sec)
+    agent_rc, agent_stdout, agent_stderr, duration = run_step(cmd, workdir, timeout=timeout_sec)
     if agent_rc == -1:
-        return _result(task, agent_name, "local", Status.TIMEOUT, "local", pre_flight, pre_flight, "",
+        return _result(task, agent_name, "local", Status.TIMEOUT, agent_version, pre_flight, pre_flight, "",
                        str(workdir), f"agent timed out after {timeout_sec}s")
     parsed = adapter.parse_output(agent_stdout, agent_stderr, agent_rc)
     if parsed.exit_code != 0:
-        return _result(task, agent_name, "local", Status.AGENT_ERROR, "local", pre_flight, pre_flight, "",
+        return _result(task, agent_name, "local", Status.AGENT_ERROR, agent_version, pre_flight, pre_flight, "",
                        str(workdir), f"agent exited non-zero: {parsed.exit_code}")
 
     # 8: Capture patch
@@ -1142,7 +1195,7 @@ def run(
     patch = diff_proc.stdout
 
     # 9: Grade
-    post = _run_tests(task["test_cmd"], workdir, timeout=timeout_sec)
+    post = _run_tests(task["test_cmd"], workdir, timeout=timeout_sec, run_subprocess=run_step)
     post_flight = {"fail_to_pass": {n: post.get(n, TestStatus.ERROR).value for n in fail_to_pass},
                    "pass_to_pass": {n: post.get(n, TestStatus.ERROR).value for n in pass_to_pass}}
     status = grade({"fail_to_pass": {n: TestStatus(v) for n, v in pre_flight["fail_to_pass"].items()},
@@ -1152,14 +1205,16 @@ def run(
 
     return _result(task, agent_name, "local", status, agent_version, pre_flight, post_flight, patch,
                    str(workdir), "", agent_model=parsed.usage.model,
-                   agent_duration=duration, agent_usage=parsed.usage)
+                   agent_duration=duration, agent_usage=parsed.usage, repeat=repeat, repeat_index=repeat_index)
 
 
 def _result(task, agent_name, mode, status, agent_version, pre_flight, post_flight, patch,
-            workdir, error, agent_model=None, agent_duration=0.0, agent_usage=None):
+            workdir, error, agent_model=None, agent_duration=0.0, agent_usage=None,
+            repeat: int = 1, repeat_index: int | None = None):
     """Build a result dict in the spec's Output JSON shape."""
+    suffix = f"__{repeat_index}" if repeat_index is not None else ""
     return {
-        "run_id": f"{_run_id_for_now()}__{agent_name}__{task['instance_id']}",
+        "run_id": f"{_run_id_for_now()}__{agent_name}__{task['instance_id']}{suffix}",
         "task_id": task["instance_id"],
         "agent": agent_name,
         "agent_version": agent_version,
@@ -1442,7 +1497,6 @@ SWEbenchRecord type so the rest of the importer is decoupled from the source.
 from __future__ import annotations
 
 import json
-import shutil
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
@@ -1468,13 +1522,16 @@ Fetcher = Callable[[str, str, Path], None]
 
 
 def default_fetcher(repo: str, base_commit: str, dest: Path) -> None:
-    """Shallow-clone the repo at base_commit into dest. Requires `git` on PATH."""
+    """Clone the repo at base_commit into dest. Requires `git` on PATH.
+
+    Uses a fetch of a specific commit (not --depth=1) so the checkout succeeds
+    for any base_commit, not just HEAD.
+    """
     url = f"https://github.com/{repo}.git"
     dest.parent.mkdir(parents=True, exist_ok=True)
-    subprocess.run(
-        ["git", "clone", "--depth=1", "--no-checkout", url, str(dest)],
-        check=True, capture_output=True,
-    )
+    subprocess.run(["git", "init", "-q", str(dest)], check=True, capture_output=True)
+    subprocess.run(["git", "remote", "add", "origin", url], cwd=dest, check=True, capture_output=True)
+    subprocess.run(["git", "fetch", "--depth=1", "origin", base_commit], cwd=dest, check=True, capture_output=True)
     subprocess.run(["git", "checkout", base_commit], cwd=dest, check=True, capture_output=True)
 
 
@@ -1612,6 +1669,12 @@ Append to `tests/test_cli.py`:
 
 ```python
 def test_pae_add_task_no_fetch(tmp_path):
+    """`pae add-task --from-swebench --no-fetch-repo` writes a task.json to tasks/.
+
+    This test requires HuggingFace access (the SWE-bench Verified dataset). It
+    is skipped (not failed) if datasets/HF is not available in the test env.
+    """
+    pytest.importorskip("datasets")
     proj = tmp_path
     result = subprocess.run(
         [sys.executable, "-m", "pae", "add-task",
@@ -1619,13 +1682,12 @@ def test_pae_add_task_no_fetch(tmp_path):
          "--tasks-dir", str(proj / "tasks")],
         capture_output=True, text=True, timeout=120,
     )
-    # may fail if HF datasets isn't installed or auth needed; assert non-zero OR success
-    if result.returncode == 0:
-        tasks = list((proj / "tasks").iterdir())
-        assert len(tasks) == 1
-    else:
-        # acceptable: we don't require HF access in CI
-        assert "datasets" in result.stderr.lower() or "huggingface" in result.stderr.lower()
+    assert result.returncode == 0, f"add-task failed: {result.stderr}"
+    tasks = list((proj / "tasks").iterdir())
+    assert len(tasks) == 1
+    task_json = json.loads((tasks[0] / "task.json").read_text())
+    assert task_json["source"]["kind"] == "swe-bench"
+    assert "fail_to_pass" in task_json
 ```
 
 - [ ] **Step 7: Run test to verify it passes**
@@ -2878,27 +2940,37 @@ def cmd_run(args: argparse.Namespace) -> int:
     results_dir = Path(args.results_dir)
     results_dir.mkdir(parents=True, exist_ok=True)
 
-    # Resume check: skip if any existing result for this (task, agent) pair
-    existing = list(results_dir.glob(f"*__{args.agent}__{args.task}*.json"))
-    if existing and not args.force:
-        print(f"skipping: {len(existing)} existing result(s) for ({args.task}, {args.agent}). Use --force to overwrite.")
-        return 0
-
+    # Resume: per (task, agent, repeat-index), skip if a result file already exists.
+    # With --repeat N, all N indices must be missing for the pair to fully run.
     workdir = None
     if args.workdir:
         workdir = Path(args.workdir)
-    result = run(
-        task_path=task_path,
-        agent_name=args.agent,
-        workdir=workdir,
-        timeout_sec=args.timeout * 60,
-        fetch_fresh=args.fetch_fresh,
-        keep_workdir=args.keep_workdir,
-    )
-    out = results_dir / f"{result['run_id']}.json"
-    out.write_text(json.dumps(result, indent=2, default=str))
-    print(f"wrote {out}")
-    print(f"status: {result['status']}")
+    repeat = max(1, args.repeat)
+    for i in range(1, repeat + 1):
+        repeat_index = i if repeat > 1 else None
+        suffix = f"__{i}" if repeat_index is not None else ""
+        out_pattern = f"*__{args.agent}__{args.task}{suffix}.json"
+        existing = list(results_dir.glob(out_pattern))
+        if existing and not args.force:
+            print(f"skipping {out_pattern}: {len(existing)} existing result(s). Use --force to overwrite.")
+            continue
+        result = run(
+            task_path=task_path,
+            agent_name=args.agent,
+            workdir=workdir,
+            timeout_sec=args.timeout * 60,
+            fetch_fresh=args.fetch_fresh,
+            keep_workdir=args.keep_workdir,
+            docker=args.docker,
+            docker_image=args.docker_image,
+            env_file=Path(args.env_file) if args.env_file else None,
+            repeat=repeat,
+            repeat_index=repeat_index,
+        )
+        out = results_dir / f"{result['run_id']}.json"
+        out.write_text(json.dumps(result, indent=2, default=str))
+        print(f"wrote {out}")
+        print(f"status: {result['status']}")
     return 0
 ```
 
@@ -2915,28 +2987,22 @@ Update `p_run` flags in `build_parser`:
                       help="clone the repo from GitHub at base_commit instead of copying from tasks/<id>/repo/")
     p_run.add_argument("--keep-workdir", action="store_true", help="don't delete the workdir after the run")
     p_run.add_argument("--force", action="store_true", help="overwrite existing result files for this (task, agent) pair")
+    p_run.add_argument("--repeat", type=int, default=1, help="run this many times (default: 1)")
+    p_run.add_argument("--docker", action="store_true", help="run inside a Docker container")
+    p_run.add_argument("--docker-image", default="python:3.11-slim",
+                      help="base image for --docker mode (default: python:3.11-slim)")
+    p_run.add_argument("--env-file", default=None,
+                      help="file with KEY=VALUE lines, passed to `docker run --env-file` (for API keys)")
 ```
 
 - [ ] **Step 2: Update `harness.run` to accept the new kwargs**
 
-In `pae/harness.py`, update the `run` signature:
+In `pae/harness.py`, the `run` signature was already extended in Task 7 to include
+`fetch_fresh`, `keep_workdir`, `docker`, `docker_image`, `env_file`, `repeat`, and
+`repeat_index`. Verify it matches the new `cmd_run` call site; if anything is
+missing, add it.
 
-```python
-def run(
-    task_path: Path,
-    agent_name: str,
-    workdir: Path | None = None,
-    timeout_sec: int = 1800,
-    fetch_fresh: bool = False,
-    keep_workdir: bool = False,
-) -> dict:
-    """..."""
-    ...
-    # In the cleanup phase at the end, only delete if we created the workdir AND keep_workdir is False
-    ...
-```
-
-Add this logic to the harness near the end of `run` (before the final return):
+Add this cleanup logic to the harness near the end of `run` (before the final return):
 
 ```python
     if workdir_owned and not keep_workdir:
@@ -3357,63 +3423,17 @@ def exec_in(
 Run: `pytest tests/test_docker_run.py -v`
 Expected: PASS (4 tests)
 
-- [ ] **Step 5: Update `pae/harness.py` to support `--docker`**
+- [ ] **Step 5: Confirm harness docker wiring (already done in Task 7)**
 
-In `pae/harness.py`, add a `docker: bool = False` kwarg to `run`. When True, replace the local-mode `_run_subprocess` calls with `exec_in(...)` calls. Concretely, change the function body to:
+Task 7's `harness.run` already includes the `run_step` closure that dispatches to
+`exec_in` when `docker=True`. Verify by reading `pae/harness.py`; no code changes
+needed for this step.
 
-```python
-def run(
-    task_path: Path,
-    agent_name: str,
-    workdir: Path | None = None,
-    timeout_sec: int = 1800,
-    fetch_fresh: bool = False,
-    keep_workdir: bool = False,
-    docker: bool = False,
-    docker_image: str = "python:3.11-slim",
-    env_file: Path | None = None,
-) -> dict:
-    """..."""
-    ...
-    # Replace _run_subprocess calls with a helper that picks docker or local:
-    def run_step(cmd, cwd, timeout):
-        if docker:
-            from pae.docker_run import exec_in
-            return exec_in(docker_image, cmd if isinstance(cmd, list) else cmd.split(),
-                            workdir=cwd, timeout=timeout, env_file=env_file)
-        return _run_subprocess(cmd, cwd, timeout=timeout)
-    ...
-```
+- [ ] **Step 6: Confirm CLI docker flags (already done in Task 19)**
 
-(The rest of `run` calls `run_step` instead of `_run_subprocess` directly.)
-
-- [ ] **Step 6: Add `--docker`, `--docker-image`, `--env-file` flags to `pae run`**
-
-In `pae/cli.py`, `p_run` setup:
-
-```python
-    p_run.add_argument("--docker", action="store_true", help="run inside a Docker container")
-    p_run.add_argument("--docker-image", default="python:3.11-slim",
-                      help="base image to use in --docker mode (default: python:3.11-slim)")
-    p_run.add_argument("--env-file", default=None,
-                      help="file with KEY=VALUE lines, passed to `docker run --env-file` (for API keys)")
-```
-
-In `cmd_run`, pass them to `run`:
-
-```python
-    result = run(
-        task_path=task_path,
-        agent_name=args.agent,
-        workdir=workdir,
-        timeout_sec=args.timeout * 60,
-        fetch_fresh=args.fetch_fresh,
-        keep_workdir=args.keep_workdir,
-        docker=args.docker,
-        docker_image=args.docker_image,
-        env_file=Path(args.env_file) if args.env_file else None,
-    )
-```
+Task 19's `p_run` setup already adds `--docker`, `--docker-image`, and `--env-file`,
+and `cmd_run` already passes them to `harness.run`. Verify by reading `pae/cli.py`;
+no code changes needed for this step.
 
 - [ ] **Step 7: Add a CLI test for `--docker` (mocked — actual docker not required)**
 
