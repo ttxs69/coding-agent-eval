@@ -751,11 +751,13 @@ Expected: FAIL with `ModuleNotFoundError: No module named 'pae.agents.mock'`
 - [ ] **Step 3: Create `pae/agents/mock.py`**
 
 ```python
-"""MockAdapter: writes a pre-canned patch from a test fixture to the workdir.
+"""MockAdapter: a no-op CLI stub for harness smoke tests and unit tests.
 
 This adapter is for tests and smoke runs only. It is registered as a first-class
 adapter so the harness exercises every code path, but pae build-site filters
-its results out of the public leaderboard.
+its results out of the public leaderboard. The default mock does NOT modify
+the workdir — tests that need a known patch should pre-apply the patch to the
+workdir before calling harness.run.
 """
 
 from __future__ import annotations
@@ -1521,6 +1523,21 @@ class SWEbenchRecord:
 Fetcher = Callable[[str, str, Path], None]
 
 
+# Per-repo setup/test commands for common SWE-bench Verified repos. The importer
+# consults this table first; if a repo isn't listed, it falls back to the
+# generic Python defaults below.
+SWE_BENCH_REPO_DEFAULTS: dict[str, dict[str, str]] = {
+    "django/django":       {"setup_cmd": "pip install -e .",       "test_cmd": "python -m pytest -xvs"},
+    "pytest-dev/pytest":   {"setup_cmd": "pip install -e .",       "test_cmd": "python -m pytest -xvs"},
+    "pallets/flask":       {"setup_cmd": "pip install -e .",       "test_cmd": "python -m pytest -xvs"},
+    "psf/requests":        {"setup_cmd": "pip install -e .",       "test_cmd": "python -m pytest -xvs"},
+    "scikit-learn/scikit-learn": {"setup_cmd": "pip install -e .",  "test_cmd": "python -m pytest -xvs"},
+    "astropy/astropy":     {"setup_cmd": "pip install -e .",       "test_cmd": "python -m pytest -xvs"},
+}
+
+GENERIC_PYTHON_DEFAULTS = {"setup_cmd": "pip install -e .", "test_cmd": "python -m pytest -xvs"}
+
+
 def default_fetcher(repo: str, base_commit: str, dest: Path) -> None:
     """Clone the repo at base_commit into dest. Requires `git` on PATH.
 
@@ -1547,16 +1564,17 @@ def import_swebench_instance(
     task_dir = Path(tasks_dir) / record.instance_id
     task_dir.mkdir(parents=True, exist_ok=True)
 
-    # task.json
+    # task.json — populate setup_cmd/test_cmd from the per-repo defaults table
+    # (or the generic Python defaults if the repo isn't in the table).
+    defaults = SWE_BENCH_REPO_DEFAULTS.get(record.repo, GENERIC_PYTHON_DEFAULTS)
+
     task_json = {
         "instance_id": record.instance_id,
         "repo": record.repo,
         "base_commit": record.base_commit,
         "prompt": record.prompt,
-        # SWE-bench records don't include setup_cmd/test_cmd directly;
-        # the harness falls back to defaults when these are missing.
-        "setup_cmd": "",
-        "test_cmd": "",
+        "setup_cmd": defaults["setup_cmd"],
+        "test_cmd": defaults["test_cmd"],
         "fail_to_pass": record.fail_to_pass,
         "pass_to_pass": record.pass_to_pass,
         "source": {"kind": "swe-bench", "split": split, "original_id": record.instance_id},
@@ -3441,8 +3459,11 @@ Append to `tests/test_cli.py`:
 
 ```python
 def test_pae_run_docker_flag_accepted(tmp_path, tiny_task_path):
-    """`--docker` should be a valid flag; the run will fail without docker, but
-    argparse should accept the flag without error."""
+    """`--docker` is accepted by argparse; the run will fail if `docker` is not
+    on PATH. We mock `subprocess.run` to assert that the docker-runner branch
+    is actually invoked (i.e., the harness called `docker run ...`)."""
+    from unittest.mock import patch, MagicMock
+
     proj = tmp_path
     tasks = proj / "tasks" / "tiny_task"
     tasks.mkdir(parents=True)
@@ -3451,19 +3472,31 @@ def test_pae_run_docker_flag_accepted(tmp_path, tiny_task_path):
         (tasks / "repo" / child.name).write_bytes(child.read_bytes())
     (proj / "results").mkdir()
 
-    result = subprocess.run(
-        [sys.executable, "-m", "pae", "run", "--agent", "mock",
-         "--task", "tiny_task", "--docker",
-         "--tasks-dir", str(proj / "tasks"),
-         "--results-dir", str(proj / "results")],
-        capture_output=True, text=True, timeout=30,
-    )
-    # Without docker on PATH, the run will fail; but the failure should mention docker, not be an argparse error
-    if result.returncode != 0:
-        assert "docker" in result.stderr.lower() or "docker" in result.stdout.lower()
-    else:
-        # if docker happens to be available and the run succeeded
-        assert (proj / "results").glob("*.json")
+    docker_calls: list[list[str]] = []
+
+    def fake_run(cmd, *args, **kwargs):
+        # Capture any docker invocation.
+        if isinstance(cmd, list) and cmd and cmd[0] == "docker":
+            docker_calls.append(cmd)
+        return MagicMock(returncode=0, stdout="ok", stderr="")
+
+    with patch("subprocess.run", side_effect=fake_run):
+        result = subprocess.run(
+            [sys.executable, "-m", "pae", "run", "--agent", "mock",
+             "--task", "tiny_task", "--docker",
+             "--tasks-dir", str(proj / "tasks"),
+             "--results-dir", str(proj / "results")],
+            capture_output=True, text=True, timeout=30,
+        )
+
+    # Either docker was actually called (at least one), or the run failed cleanly.
+    # We don't assert the exact call count because the harness invokes docker
+    # for setup, pre-flight, agent, and grading — any of those being called
+    # proves the docker branch is wired up.
+    assert result.returncode == 0 or "docker" in result.stderr.lower()
+    # If subprocess was mocked to succeed, the harness should have run end-to-end.
+    if result.returncode == 0:
+        assert docker_calls, "expected at least one docker invocation with --docker"
 ```
 
 - [ ] **Step 8: Run all tests**
