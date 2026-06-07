@@ -1,0 +1,13 @@
+{
+  "instance_id": "tiny__task-1",
+  "repo": "tiny/task",
+  "base_commit": "0000000000000000000000000000000000000000",
+  "language": "python",
+  "framework": "stdlib",
+  "difficulty": "easy",
+  "prompt": "Fix the add() function so it returns a + b instead of a - b.",
+  "setup_cmd": "",
+  "test_cmd": "python -m pytest test_main.py -v",
+  "fail_to_pass": ["test_main.py::test_add"],
+  "pass_to_pass": ["test_main.py::test_multiply"]
+}
