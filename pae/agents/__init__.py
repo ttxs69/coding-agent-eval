@@ -4,6 +4,7 @@ ADAPTERS is the registry used by get_adapter() and list_adapters(). New adapters
 import their class and add an entry here.
 """
 
+from pae.agents.aider import AiderAdapter
 from pae.agents.base import AgentAdapter
 from pae.agents.claude_code import ClaudeCodeAdapter
 from pae.agents.codex import CodexAdapter
@@ -13,6 +14,7 @@ ADAPTERS: dict[str, type[AgentAdapter]] = {
     "mock": MockAdapter,
     "claude-code": ClaudeCodeAdapter,
     "codex": CodexAdapter,
+    "aider": AiderAdapter,
 }
 
 

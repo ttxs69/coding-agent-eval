@@ -106,3 +106,21 @@ def test_codex_parse_output_extracts_usage():
     assert result.usage.tokens_in == 200
     assert result.usage.tokens_out == 80
     assert result.usage.model == "gpt-5"
+
+
+def test_aider_adapter_build_command_includes_prompt():
+    from pae.agents.aider import AiderAdapter
+    cmd = AiderAdapter().build_command(Path("/tmp/x"), "do the thing", model=None)
+    assert cmd[0] == "aider"
+    assert "do the thing" in cmd
+    # aider uses --yes for non-interactive runs
+    assert "--yes" in cmd or "-y" in cmd
+
+
+def test_aider_parse_output_no_native_json():
+    """Aider doesn't emit JSON by default; cost is unknown."""
+    from pae.agents.aider import AiderAdapter
+    result = AiderAdapter().parse_output("Aider ran.", "", 0)
+    assert result.usage.cost_usd is None
+    assert result.usage.tokens_in is None
+    assert result.exit_code == 0
