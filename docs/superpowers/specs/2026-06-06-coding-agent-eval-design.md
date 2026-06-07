@@ -110,7 +110,7 @@ pae add-task --from-swebench --dataset-path /path/to/SWE-bench --split verified
 1. Pulls the instance metadata (`repo`, `base_commit`, `prompt`, `FAIL_TO_PASS`, `PASS_TO_PASS`) from the SWE-bench dataset (HuggingFace `datasets` library or a local clone).
 2. Renames fields to our schema (`FAIL_TO_PASS` → `fail_to_pass`, etc.).
 3. Writes `task.json` to `tasks/<instance_id>/task.json`.
-4. Records the base commit's repo state (shallow git clone at `base_commit` into `tasks/<id>/repo/`, or a git submodule — implementation choice).
+4. Records the base commit's repo state by shallow-cloning the repo at `base_commit` into `tasks/<id>/repo/`. (Git submodules are NOT used in v1 — the importer always produces a plain directory so the harness's step 3 `cp` works without submodule awareness.)
 5. Records the test patch into `tasks/<id>/tests.patch` for reference and grading.
 6. Sets a `source: {kind: "swe-bench", split: "verified", original_id: "..."}` field in `task.json` for provenance.
 
@@ -129,6 +129,10 @@ class AgentAdapter(Protocol):
 
     def is_available(self) -> bool:
         """Returns True if the underlying CLI is installed and runnable."""
+
+    def version(self) -> str:
+        """Returns the installed CLI's version string (e.g. from `claude --version`).
+        Captured once per run, written to the result JSON as `agent_version`."""
 
     def build_command(self, workdir: Path, prompt: str, *, model: str | None) -> list[str]:
         """Returns the argv to run."""
@@ -167,7 +171,7 @@ pae run --agent claude --task django-12345 [--docker] [--timeout 30m] [--repeat 
    │     ├─ Local:  copy tasks/<id>/repo/ → workdir (offline, deterministic, default)
    │     │          --fetch-fresh: git clone <repo> workdir && git checkout <base_commit> (network, up-to-date)
    │     └─ Docker: docker exec copy (or clone) into the container's workdir
-   ├─ 4. Apply test patch (if task has tests.patch)
+   ├─ 4. Apply test patch (if `tasks/<id>/tests.patch` exists)
    │     └─ git apply tasks/<id>/tests.patch in workdir
    │        (No-op for hand-authored tasks where test cases are already in the repo.)
    ├─ 5. Setup
@@ -209,7 +213,7 @@ Only `passed` and `failed` are grading-relevant. A test in `fail_to_pass` must e
 
 ### Status enum
 
-`resolved` | `failed` | `agent_error` (CLI missing, crashed) | `timeout` | `task_error` (broken pre-flight) | `grader_error` (test runner misconfigured)
+`resolved` | `failed` | `agent_error` (CLI missing, crashed) | `timeout` | `task_error` (broken pre-flight) | `grader_error` (test runner failed to start, or its output could not be parsed for per-test results; per-test `error` statuses during a successful run are recorded but don't trigger this)
 
 Broken tasks and agent crashes must not silently count as "failed" alongside legitimate attempts. Each status is reported separately on the site.
 
@@ -224,7 +228,7 @@ Broken tasks and agent crashes must not silently count as "failed" alongside leg
 
 - **Timeout**: default 30 min per agent run, configurable. Killed cleanly; patch captured up to kill point.
 - **Workdir cleanup**: default delete after run. `--keep-workdir` prints the path in the result JSON for debugging.
-- **Resume**: if `results/<run>.json` already exists, skip with a warning. `--force` to overwrite. Interrupted batches are restartable.
+- **Resume**: if any result file for the requested (task, agent) pair already exists in `results/`, skip with a warning. `--force` to overwrite. With `--repeat N`, runs whose index already has a result file are skipped; missing indices are run. Interrupted batches are restartable by re-running the same `pae run` command.
 - **Concurrency**: v1 is single-threaded. A `--parallel N` flag can come later.
 
 ## Output JSON
@@ -242,10 +246,16 @@ Broken tasks and agent crashes must not silently count as "failed" alongside leg
   "duration_sec": 412.7,
   "harness_git_sha": "da1b1d0",
   "task_source": {"kind": "swe-bench", "split": "verified", "original_id": "django__django-12345", "swe_bench_commit": "abc1234"},
-  "usage": { "tokens_in": 12345, "tokens_out": 6789, "cost_usd": 0.42, "model": "claude-opus-4-7", "billing_mode": "api" },
+  "usage": { "tokens_in": 12345, "tokens_out": 6789, "cost_usd": 0.42, "billing_mode": "api" },
   "test_results": {
-    "fail_to_pass": {"tests.test_x.TestFoo.test_bar": "passed"},
-    "pass_to_pass": {"tests.test_x.TestFoo.test_baz": "passed"}
+    "pre_flight": {
+      "fail_to_pass": {"tests.test_x.TestFoo.test_bar": "failed"},
+      "pass_to_pass": {"tests.test_x.TestFoo.test_baz": "passed"}
+    },
+    "post_flight": {
+      "fail_to_pass": {"tests.test_x.TestFoo.test_bar": "passed"},
+      "pass_to_pass": {"tests.test_x.TestFoo.test_baz": "passed"}
+    }
   },
   "patch": "diff --git a/...",
   "workdir": "/tmp/pae-XXXX"
@@ -256,6 +266,8 @@ Broken tasks and agent crashes must not silently count as "failed" alongside leg
 - `agent_version` — captured by the adapter from the installed CLI's own version output (e.g. `claude --version`) at run start. The exact mechanism is adapter-defined; the contract is "the version string of the agent CLI that produced this patch."
 - `started_at` — UTC ISO 8601 with `Z` suffix.
 - `run_id` — filesystem-safe variant of `started_at`: same instant, colons replaced with dashes, slashes removed. Filename-safe.
+- `mode` — `"local"` (default) or `"docker"`. `--docker` flag flips it.
+- `model` is recorded once at the top level; the `usage` block deliberately omits it to avoid duplication.
 
 ## Metrics & Static Site
 
@@ -275,7 +287,7 @@ Broken tasks and agent crashes must not silently count as "failed" alongside leg
 ### Site pages
 
 - **`index.html`** — sortable leaderboard. Columns: Agent, Model, Pass rate, # tasks, Median cost, Median time, Median tokens, Last run. Click headers to sort.
-- **`tasks/<id>.html`** — per-task detail. The issue prompt at the top, then one collapsible section per agent showing: status badge, syntax-highlighted patch, per-test results (which `fail_to_pass` now pass, which `pass_to_pass` regressed), time, cost.
+- **`tasks/<id>.html`** — per-task detail. The issue prompt at the top, then one collapsible section per agent showing: status badge, syntax-highlighted patch, per-test results (which `fail_to_pass` now pass, which `pass_to_pass` are no longer passing — including `failed`, `error`, `skipped`, `xfail`), time, cost.
 - **Footer** — generation timestamp + git SHA of the harness that built the site.
 
 ### Tech
