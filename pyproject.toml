@@ -26,6 +26,7 @@ include = ["pae*"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-ra"
+norecursedirs = ["tests/fixtures"]
 
 [tool.ruff]
 line-length = 100
