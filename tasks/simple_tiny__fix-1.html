@@ -1,0 +1,48 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>simple_tiny__fix-1</title>
+<style>body{font:14px/1.4 system-ui,sans-serif;max-width:900px;margin:2em auto;padding:0 1em}
+pre{background:#f5f5f5;padding:1em;overflow-x:auto}
+@media(prefers-color-scheme:dark){body{background:#1a1a1a;color:#ddd}pre{background:#222}}
+</style></head><body>
+<h1>simple_tiny__fix-1</h1>
+<details>
+<summary><strong>claude-code</strong> — resolved</summary>
+<p>Model: <code>claude-opus-4-8[1m]</code> &middot;
+   Duration: 14s &middot;
+   Cost: $0.14</p>
+<pre><code>diff --git a/main.py b/main.py
+index 8b62b4f..18e50ed 100644
+--- a/main.py
++++ b/main.py
+@@ -2,7 +2,7 @@
+ 
+ 
+ def add(a: int, b: int) -&gt; int:
+-    return a - b  # bug: should be a + b
++    return a + b
+ 
+ 
+ def multiply(a: int, b: int) -&gt; int:
+</code></pre>
+</details><details>
+<summary><strong>codex</strong> — resolved</summary>
+<p>Model: <code></code> &middot;
+   Duration: 29s &middot;
+   Cost: $?</p>
+<pre><code>diff --git a/main.py b/main.py
+index 8b62b4f..18e50ed 100644
+--- a/main.py
++++ b/main.py
+@@ -2,7 +2,7 @@
+ 
+ 
+ def add(a: int, b: int) -&gt; int:
+-    return a - b  # bug: should be a + b
++    return a + b
+ 
+ 
+ def multiply(a: int, b: int) -&gt; int:
+</code></pre>
+</details>
+<p><a href="../index.html">back to leaderboard</a></p>
+</body></html>

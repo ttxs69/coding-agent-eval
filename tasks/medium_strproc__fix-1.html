@@ -1,0 +1,73 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>medium_strproc__fix-1</title>
+<style>body{font:14px/1.4 system-ui,sans-serif;max-width:900px;margin:2em auto;padding:0 1em}
+pre{background:#f5f5f5;padding:1em;overflow-x:auto}
+@media(prefers-color-scheme:dark){body{background:#1a1a1a;color:#ddd}pre{background:#222}}
+</style></head><body>
+<h1>medium_strproc__fix-1</h1>
+<details>
+<summary><strong>claude-code</strong> — resolved</summary>
+<p>Model: <code>claude-opus-4-8[1m]</code> &middot;
+   Duration: 19s &middot;
+   Cost: $0.08</p>
+<pre><code>diff --git a/strproc.py b/strproc.py
+index bdc42da..45070f0 100644
+--- a/strproc.py
++++ b/strproc.py
+@@ -4,15 +4,16 @@ def reverse_words(s: str) -&gt; str:
+     # bug: returns words in wrong order (reversed correctly only if you
+     # use split()) — but this implementation has the words in original order
+     # because it uses s[::-1] on the whole string
+-    return s[::-1]  # bug: this reverses characters, not words
++    return &quot; &quot;.join(s.split()[::-1])
+ 
+ def count_vowels(s: str) -&gt; int:
+     count = 0
+     for c in s:
+-        if c in &quot;aeiou&quot;:  # bug: missing uppercase
++        if c.lower() in &quot;aeiou&quot;:
+             count += 1
+     return count
+ 
+ def is_palindrome(s: str) -&gt; bool:
+     s = s.lower()
+-    return s == s[::-1]  # bug: doesn&#x27;t strip whitespace
++    s = s.replace(&quot; &quot;, &quot;&quot;).lower()
++    return s == s[::-1]
+</code></pre>
+</details><details>
+<summary><strong>codex</strong> — resolved</summary>
+<p>Model: <code></code> &middot;
+   Duration: 37s &middot;
+   Cost: $?</p>
+<pre><code>diff --git a/strproc.py b/strproc.py
+index bdc42da..473fdd9 100644
+--- a/strproc.py
++++ b/strproc.py
+@@ -1,18 +1,15 @@
+ &quot;&quot;&quot;String processing utilities with bugs.&quot;&quot;&quot;
+ 
+ def reverse_words(s: str) -&gt; str:
+-    # bug: returns words in wrong order (reversed correctly only if you
+-    # use split()) — but this implementation has the words in original order
+-    # because it uses s[::-1] on the whole string
+-    return s[::-1]  # bug: this reverses characters, not words
++    return &quot; &quot;.join(s.split()[::-1])
+ 
+ def count_vowels(s: str) -&gt; int:
+     count = 0
+     for c in s:
+-        if c in &quot;aeiou&quot;:  # bug: missing uppercase
++        if c in &quot;aeiouAEIOU&quot;:
+             count += 1
+     return count
+ 
+ def is_palindrome(s: str) -&gt; bool:
+-    s = s.lower()
+-    return s == s[::-1]  # bug: doesn&#x27;t strip whitespace
++    s = s.lower().replace(&quot; &quot;, &quot;&quot;)
++    return s == s[::-1]
+</code></pre>
+</details>
+<p><a href="../index.html">back to leaderboard</a></p>
+</body></html>

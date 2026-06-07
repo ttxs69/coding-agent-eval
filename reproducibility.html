@@ -1,0 +1,22 @@
+<!doctype html>
+<html><head><meta charset="utf-8"></head><body>
+<h1>Reproducibility</h1>
+<p>Every leaderboard row can be reproduced from a single command.</p>
+<h2>What&#x27;s in a result</h2>
+<p>Each <code>results/&lt;run_id&gt;.json</code> captures:</p>
+<ul>
+<li><code>agent</code>, <code>agent_version</code>, <code>model</code> — what was run</li>
+<li><code>mode</code> — <code>local</code> or <code>docker</code></li>
+<li><code>started_at</code>, <code>harness_git_sha</code> — when and with which code</li>
+<li><code>task_source</code> — the SWE-bench split and upstream commit</li>
+<li><code>patch</code>, <code>test_results</code> — what the agent produced and how the tests ran</li>
+</ul>
+<h2>Reproducing a row</h2>
+<p>Given a row, find the <code>agent</code> and the task list, then run:</p>
+<pre><code>
+cae run --agent &lt;agent&gt; --task &lt;task_id&gt; [--docker]
+</code></pre>
+<p>For the official leaderboard, always use <code>--docker</code> so the run is reproducible across machines. Without it, results depend on the local Python/library versions in the workdir.</p>
+<h2>Upstream drift</h2>
+<p>If the SWE-bench dataset is updated, old results can still be re-run because <code>task_source.swe_bench_commit</code> is recorded in the result JSON. The importer writes this at import time.</p>
+</body></html>
