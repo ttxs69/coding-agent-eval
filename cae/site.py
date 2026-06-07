@@ -23,15 +23,27 @@ def _now_iso() -> str:
 
 
 def _harness_sha() -> str:
+    """Return the harness's git short SHA, walking up from this file to find .git.
+
+    Walks up from cae/site.py looking for the nearest .git directory so this
+    works regardless of how many levels deep site.py is nested (e.g. in a
+    pip-installed package or in a source tree). Falls back to "unknown" if
+    no .git is found.
+    """
     import subprocess
-    try:
-        proc = subprocess.run(
-            ["git", "rev-parse", "--short", "HEAD"],
-            capture_output=True, text=True, check=True, cwd=Path(__file__).resolve().parent.parent.parent,
-        )
-        return proc.stdout.strip()
-    except Exception:
-        return "unknown"
+    p = Path(__file__).resolve().parent
+    while p != p.parent:
+        if (p / ".git").exists():
+            try:
+                proc = subprocess.run(
+                    ["git", "rev-parse", "--short", "HEAD"],
+                    capture_output=True, text=True, check=True, cwd=p,
+                )
+                return proc.stdout.strip()
+            except Exception:
+                return "unknown"
+        p = p.parent
+    return "unknown"
 
 
 def _fmt_cost(v):
