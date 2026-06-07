@@ -13,6 +13,13 @@ env/
 build/
 dist/
 
+# Generated static site (output of `pae build-site`)
+site/
+
+# Test / cache artifacts
+.pytest_cache/
+.ruff_cache/
+
 # MemPalace per-project files (issue #185)
 mempalace.yaml
 entities.json
