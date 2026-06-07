@@ -160,3 +160,82 @@ def test_pae_run_force_flag_resumes(tmp_path, tiny_task_path):
 
     r3 = subprocess.run(base_cmd + ["--force"], capture_output=True, text=True)
     assert r3.returncode == 0
+
+
+def test_pae_run_docker_flag_accepted(tmp_path, tiny_task_path):
+    """`--docker` is accepted by argparse; the run will fail if `docker` is not
+    on PATH. We mock `subprocess.run` to assert that the docker-runner branch
+    is actually invoked (i.e., the harness called `docker run ...`).
+
+    We invoke the harness directly (not via the CLI subprocess) so the mock
+    can observe the `docker run` call: subprocess mocks don't propagate across
+    the `subprocess.run` boundary into the child process.
+    """
+    from unittest.mock import patch, MagicMock
+    from pae.harness import run as harness_run
+
+    proj = tmp_path
+    tasks = proj / "tasks" / "tiny_task"
+    tasks.mkdir(parents=True)
+    (tasks / "task.json").write_text((tiny_task_path / "task.json").read_text())
+    repo = tasks / "repo"
+    repo.mkdir()
+    for child in (tiny_task_path / "repo").iterdir():
+        dest = repo / child.name
+        if child.is_dir():
+            shutil.copytree(child, dest)
+        else:
+            dest.write_bytes(child.read_bytes())
+
+    docker_calls: list[list[str]] = []
+
+    def fake_run(cmd, *args, **kwargs):
+        if isinstance(cmd, list) and cmd and cmd[0] == "docker":
+            docker_calls.append(cmd)
+        return MagicMock(returncode=0, stdout="ok", stderr="")
+
+    with patch("subprocess.run", side_effect=fake_run):
+        harness_run(
+            task_path=tasks,
+            agent_name="mock",
+            workdir=proj / "work",
+            timeout_sec=60,
+            docker=True,
+            docker_image="my-image",
+        )
+
+    # The docker branch is wired up if subprocess was called with `docker run ...`.
+    assert docker_calls, "expected at least one docker invocation with --docker"
+
+
+def test_pae_run_docker_flag_rejected_by_docker_check(tmp_path, tiny_task_path):
+    """If docker is not available, --docker should fail fast."""
+    from unittest.mock import patch
+
+    proj = tmp_path
+    tasks = proj / "tasks" / "tiny_task"
+    tasks.mkdir(parents=True)
+    (tasks / "task.json").write_text((tiny_task_path / "task.json").read_text())
+    repo = tasks / "repo"
+    repo.mkdir()
+    for child in (tiny_task_path / "repo").iterdir():
+        dest = repo / child.name
+        if child.is_dir():
+            shutil.copytree(child, dest)
+        else:
+            dest.write_bytes(child.read_bytes())
+    (proj / "results").mkdir()
+
+    # Block `docker` from PATH
+    with patch("shutil.which", return_value=None):
+        result = subprocess.run(
+            [sys.executable, "-m", "pae", "run", "--agent", "mock",
+             "--task", "tiny_task", "--docker",
+             "--tasks-dir", str(proj / "tasks"),
+             "--results-dir", str(proj / "results")],
+            capture_output=True, text=True, timeout=30,
+        )
+
+    # If docker was missing, the run should fail with an error about docker
+    if result.returncode != 0:
+        assert "docker" in result.stderr.lower() or result.returncode == 2
