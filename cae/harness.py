@@ -1,6 +1,6 @@
 """Run loop: orchestrate one (task, agent) pair through the 11-step lifecycle.
 
-This module implements local mode only in v1. Docker mode (pae/docker_run.py)
+This module implements local mode only in v1. Docker mode (cae/docker_run.py)
 is added in Phase 5 (Task 22). Steps 1-11 follow the spec section "Run Lifecycle".
 """
 
@@ -64,8 +64,8 @@ def _ensure_git_repo(workdir: Path) -> None:
     if (workdir / ".git").exists():
         return
     subprocess.run(["git", "init", "-q"], cwd=workdir, check=True)
-    subprocess.run(["git", "config", "user.email", "pae@local"], cwd=workdir, check=True)
-    subprocess.run(["git", "config", "user.name", "pae"], cwd=workdir, check=True)
+    subprocess.run(["git", "config", "user.email", "cae@local"], cwd=workdir, check=True)
+    subprocess.run(["git", "config", "user.name", "cae"], cwd=workdir, check=True)
     # If workdir is empty except for .git (e.g., --no-fetch-repo or a SWE-bench
     # task that imported without a repo/), `git add .` is a no-op and `git commit`
     # would fail with "nothing to commit". Make an empty initial commit so

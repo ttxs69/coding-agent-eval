@@ -228,7 +228,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
     if args.version:
-        from pae import __version__
+        from cae import __version__
         print(__version__)
         return 0
     if not getattr(args, "command", None):

@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Build a Python package `probe-agent-eval` (CLI: `pae`) that evaluates CLI coding agents (Claude Code, Codex, Aider) on SWE-bench Verified tasks and publishes results as a static leaderboard.
+**Goal:** Build a Python package `probe-agent-eval` (CLI: `cae`) that evaluates CLI coding agents (Claude Code, Codex, Aider) on SWE-bench Verified tasks and publishes results as a static leaderboard.
 
 **Architecture:** Single Python package, one CLI, JSON results in git, static site. Local-first with Docker opt-in. SWE-bench Verified is the v1 task source. End-to-end vertical slice first (mock agent, tiny fixture), then real agents, importer, and site.
 
@@ -16,9 +16,9 @@
 
 ```
 probe-agent-eval/
-├── pyproject.toml             # one Python package, "pae" CLI, deps: datasets, pytest, ruff
+├── pyproject.toml             # one Python package, "cae" CLI, deps: datasets, pytest, ruff
 ├── README.md
-├── pae/
+├── cae/
 │   ├── __init__.py
 │   ├── cli.py                 # argparse entry: run / build-site / add-task / list-agents / report
 │   ├── harness.py             # run loop: steps 1-11 from spec
@@ -71,15 +71,15 @@ probe-agent-eval/
 
 ## Phase 1: Vertical Slice (Tasks 1–8)
 
-Goal: a working end-to-end `pae run` with the mock adapter against a tiny in-repo task. After Task 8, `cae run --agent mock --task tiny_task` produces a result JSON. Everything after Phase 1 is iteration on this base.
+Goal: a working end-to-end `cae run` with the mock adapter against a tiny in-repo task. After Task 8, `cae run --agent mock --task tiny_task` produces a result JSON. Everything after Phase 1 is iteration on this base.
 
 ### Task 1: Project Skeleton
 
 **Files:**
 - Create: `pyproject.toml`
-- Create: `pae/__init__.py`
-- Create: `pae/cli.py`
-- Create: `pae/__main__.py` (enables `python -m cae`)
+- Create: `cae/__init__.py`
+- Create: `cae/cli.py`
+- Create: `cae/__main__.py` (enables `python -m cae`)
 - Create: `tests/__init__.py`
 - Create: `tests/test_cli.py`
 - Create: `results/.gitkeep`
@@ -101,13 +101,13 @@ def test_cae_runs_and_prints_help():
         text=True,
     )
     assert result.returncode == 0
-    assert "pae" in result.stdout.lower() or "usage" in result.stdout.lower()
+    assert "cae" in result.stdout.lower() or "usage" in result.stdout.lower()
 ```
 
 - [ ] **Step 2: Run test to verify it fails**
 
 Run: `cd /Users/sarace/dev/probe/agent_eval && python -m pytest tests/test_cli.py::test_cae_runs_and_prints_help -v`
-Expected: FAIL with `ModuleNotFoundError: No module named 'pae'`
+Expected: FAIL with `ModuleNotFoundError: No module named 'cae'`
 
 - [ ] **Step 3: Create `pyproject.toml`**
 
@@ -132,10 +132,10 @@ dev = [
 ]
 
 [project.scripts]
-pae = "pae.cli:main"
+cae = "cae.cli:main"
 
 [tool.setuptools.packages.find]
-include = ["pae*"]
+include = ["cae*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -146,12 +146,12 @@ line-length = 100
 target-version = "py311"
 
 [tool.pyright]
-include = ["pae", "tests"]
+include = ["cae", "tests"]
 pythonVersion = "3.11"
 venv = ".venv"
 ```
 
-- [ ] **Step 4: Create `pae/__init__.py`**
+- [ ] **Step 4: Create `cae/__init__.py`**
 
 ```python
 """probe-agent-eval: public benchmark for CLI coding agents."""
@@ -159,7 +159,7 @@ venv = ".venv"
 __version__ = "0.1.0"
 ```
 
-- [ ] **Step 5: Create `pae/cli.py`**
+- [ ] **Step 5: Create `cae/cli.py`**
 
 ```python
 """Command-line interface for cae."""
@@ -181,7 +181,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
     if args.version:
-        from pae import __version__
+        from cae import __version__
         print(__version__)
         return 0
     parser.print_help()
@@ -192,7 +192,7 @@ if __name__ == "__main__":
     sys.exit(main())
 ```
 
-- [ ] **Step 5b: Create `pae/__main__.py`**
+- [ ] **Step 5b: Create `cae/__main__.py`**
 
 ```python
 """Allow `python -m cae` to invoke the CLI."""
@@ -234,7 +234,7 @@ Public benchmark for CLI coding agents. See `docs/superpowers/specs/2026-06-06-c
 
 ```
 pip install -e ".[dev]"
-pae --help
+cae --help
 ```
 
 ## Status
@@ -259,7 +259,7 @@ Expected: PASS
 - [ ] **Step 11: Commit**
 
 ```bash
-git add pyproject.toml pae/__init__.py pae/cli.py pae/__main__.py tests/__init__.py tests/test_cli.py results/.gitkeep README.md .gitignore
+git add pyproject.toml cae/__init__.py cae/cli.py cae/__main__.py tests/__init__.py tests/test_cli.py results/.gitkeep README.md .gitignore
 git commit -m "Task 1: project skeleton (pyproject, CLI, package init, __main__)"
 ```
 
@@ -268,8 +268,8 @@ git commit -m "Task 1: project skeleton (pyproject, CLI, package init, __main__)
 ### Task 2: Core Types
 
 **Files:**
-- Create: `pae/agents/__init__.py`
-- Create: `pae/agents/base.py`
+- Create: `cae/agents/__init__.py`
+- Create: `cae/agents/base.py`
 - Create: `tests/test_status.py`
 
 - [ ] **Step 1: Write the failing test**
@@ -311,15 +311,15 @@ def test_status_count():
 - [ ] **Step 2: Run test to verify it fails**
 
 Run: `pytest tests/test_status.py -v`
-Expected: FAIL with `ModuleNotFoundError: No module named 'pae.agents'`
+Expected: FAIL with `ModuleNotFoundError: No module named 'cae.agents'`
 
-- [ ] **Step 3: Create `pae/agents/__init__.py`**
+- [ ] **Step 3: Create `cae/agents/__init__.py`**
 
 ```python
-"""Agent adapters for pae."""
+"""Agent adapters for cae."""
 ```
 
-- [ ] **Step 4: Create `pae/agents/base.py`**
+- [ ] **Step 4: Create `cae/agents/base.py`**
 
 ```python
 """Core types: AgentAdapter Protocol, AgentResult, UsageInfo, status enums."""
@@ -409,7 +409,7 @@ Expected: PASS (4 tests)
 - [ ] **Step 6: Commit**
 
 ```bash
-git add pae/agents/__init__.py pae/agents/base.py tests/test_status.py
+git add cae/agents/__init__.py cae/agents/base.py tests/test_status.py
 git commit -m "Task 2: core types (Status, TestStatus, AgentAdapter Protocol)"
 ```
 
@@ -418,7 +418,7 @@ git commit -m "Task 2: core types (Status, TestStatus, AgentAdapter Protocol)"
 ### Task 3: Pytest Parser
 
 **Files:**
-- Create: `pae/parsers.py`
+- Create: `cae/parsers.py`
 - Create: `tests/test_parsers.py`
 
 - [ ] **Step 1: Write the failing test**
@@ -494,9 +494,9 @@ def test_parse_pytest_empty():
 - [ ] **Step 2: Run test to verify it fails**
 
 Run: `pytest tests/test_parsers.py -v`
-Expected: FAIL with `ModuleNotFoundError: No module named 'pae.parsers'`
+Expected: FAIL with `ModuleNotFoundError: No module named 'cae.parsers'`
 
-- [ ] **Step 3: Create `pae/parsers.py`**
+- [ ] **Step 3: Create `cae/parsers.py`**
 
 ```python
 """Per-runner parsers: map a test runner's output to {test_name: TestStatus}.
@@ -545,7 +545,7 @@ Expected: PASS (6 tests)
 - [ ] **Step 5: Commit**
 
 ```bash
-git add pae/parsers.py tests/test_parsers.py
+git add cae/parsers.py tests/test_parsers.py
 git commit -m "Task 3: pytest parser"
 ```
 
@@ -554,7 +554,7 @@ git commit -m "Task 3: pytest parser"
 ### Task 4: Grader
 
 **Files:**
-- Create: `pae/grader.py`
+- Create: `cae/grader.py`
 - Create: `tests/test_grader.py`
 
 - [ ] **Step 1: Write the failing test**
@@ -616,9 +616,9 @@ def test_failed_with_no_pass_to_pass_but_fail_to_pass_unresolved():
 - [ ] **Step 2: Run test to verify it fails**
 
 Run: `pytest tests/test_grader.py -v`
-Expected: FAIL with `ModuleNotFoundError: No module named 'pae.grader'`
+Expected: FAIL with `ModuleNotFoundError: No module named 'cae.grader'`
 
-- [ ] **Step 3: Create `pae/grader.py`**
+- [ ] **Step 3: Create `cae/grader.py`**
 
 ```python
 """Decide the top-level task Status from pre-flight and post-flight test results.
@@ -661,7 +661,7 @@ Expected: PASS (7 tests)
 - [ ] **Step 5: Commit**
 
 ```bash
-git add pae/grader.py tests/test_grader.py
+git add cae/grader.py tests/test_grader.py
 git commit -m "Task 4: grader (decides Status from pre/post flight)"
 ```
 
@@ -670,8 +670,8 @@ git commit -m "Task 4: grader (decides Status from pre/post flight)"
 ### Task 5: Mock Adapter
 
 **Files:**
-- Create: `pae/agents/mock.py`
-- Modify: `pae/agents/__init__.py`
+- Create: `cae/agents/mock.py`
+- Modify: `cae/agents/__init__.py`
 - Modify: `tests/test_agents.py`
 
 - [ ] **Step 1: Write the failing test**
@@ -746,15 +746,15 @@ def test_list_adapters_includes_mock():
 - [ ] **Step 2: Run test to verify it fails**
 
 Run: `pytest tests/test_agents.py -v`
-Expected: FAIL with `ModuleNotFoundError: No module named 'pae.agents.mock'`
+Expected: FAIL with `ModuleNotFoundError: No module named 'cae.agents.mock'`
 
-- [ ] **Step 3: Create `pae/agents/mock.py`**
+- [ ] **Step 3: Create `cae/agents/mock.py`**
 
 ```python
 """MockAdapter: a no-op CLI stub for harness smoke tests and unit tests.
 
 This adapter is for tests and smoke runs only. It is registered as a first-class
-adapter so the harness exercises every code path, but pae build-site filters
+adapter so the harness exercises every code path, but cae build-site filters
 its results out of the public leaderboard. The default mock does NOT modify
 the workdir — tests that need a known patch should pre-apply the patch to the
 workdir before calling harness.run.
@@ -797,10 +797,10 @@ class MockAdapter:
         )
 ```
 
-- [ ] **Step 4: Update `pae/agents/__init__.py`**
+- [ ] **Step 4: Update `cae/agents/__init__.py`**
 
 ```python
-"""Agent adapters for pae.
+"""Agent adapters for cae.
 
 ADAPTERS is the registry used by get_adapter() and list_adapters(). New adapters
 import their class and add an entry here.
@@ -847,7 +847,7 @@ Expected: PASS (7 tests)
 - [ ] **Step 6: Commit**
 
 ```bash
-git add pae/agents/mock.py pae/agents/__init__.py tests/test_agents.py
+git add cae/agents/mock.py cae/agents/__init__.py tests/test_agents.py
 git commit -m "Task 5: MockAdapter + adapter registry"
 ```
 
@@ -864,7 +864,7 @@ git commit -m "Task 5: MockAdapter + adapter registry"
 - [ ] **Step 1: Create `tests/conftest.py`**
 
 ```python
-"""Shared pytest fixtures for pae tests."""
+"""Shared pytest fixtures for cae tests."""
 
 from pathlib import Path
 
@@ -954,7 +954,7 @@ git commit -m "Task 6: tiny test fixture (known-bug-and-known-fix)"
 ### Task 7: Harness (Run Loop)
 
 **Files:**
-- Create: `pae/harness.py`
+- Create: `cae/harness.py`
 - Create: `tests/test_harness.py`
 
 This is the largest task. The harness implements the 11-step run lifecycle from the spec for a single (task, agent) pair in local mode. Docker mode and --repeat are added in Phase 5.
@@ -1006,14 +1006,14 @@ def test_run_resolves_tiny_task_with_mock_that_fixes_the_bug(tmp_path, tiny_task
 - [ ] **Step 2: Run test to verify it fails**
 
 Run: `pytest tests/test_harness.py -v`
-Expected: FAIL with `ModuleNotFoundError: No module named 'pae.harness'`
+Expected: FAIL with `ModuleNotFoundError: No module named 'cae.harness'`
 
-- [ ] **Step 3: Create `pae/harness.py`**
+- [ ] **Step 3: Create `cae/harness.py`**
 
 ```python
 """Run loop: orchestrate one (task, agent) pair through the 11-step lifecycle.
 
-This module implements local mode only in v1. Docker mode (pae/docker_run.py)
+This module implements local mode only in v1. Docker mode (cae/docker_run.py)
 is added in Phase 5 (Task 22). Steps 1-11 follow the spec section "Run Lifecycle".
 """
 
@@ -1065,8 +1065,8 @@ def _ensure_git_repo(workdir: Path) -> None:
     if (workdir / ".git").exists():
         return
     subprocess.run(["git", "init", "-q"], cwd=workdir, check=True)
-    subprocess.run(["git", "config", "user.email", "pae@local"], cwd=workdir, check=True)
-    subprocess.run(["git", "config", "user.name", "pae"], cwd=workdir, check=True)
+    subprocess.run(["git", "config", "user.email", "cae@local"], cwd=workdir, check=True)
+    subprocess.run(["git", "config", "user.name", "cae"], cwd=workdir, check=True)
     subprocess.run(["git", "add", "."], cwd=workdir, check=True)
     subprocess.run(["git", "commit", "-q", "-m", "initial"], cwd=workdir, check=True)
 
@@ -1127,7 +1127,7 @@ def run(
     # 1-3: Resolve task, create workdir, fetch repo
     workdir_owned = workdir is None
     if workdir is None:
-        workdir = Path(tempfile.mkdtemp(prefix="pae-"))
+        workdir = Path(tempfile.mkdtemp(prefix="cae-"))
     workdir = Path(workdir)
     workdir.mkdir(parents=True, exist_ok=True)
 
@@ -1255,16 +1255,16 @@ Expected: PASS (1 test, takes a few seconds for the agent subprocess and test ru
 - [ ] **Step 5: Commit**
 
 ```bash
-git add pae/harness.py tests/test_harness.py
+git add cae/harness.py tests/test_harness.py
 git commit -m "Task 7: harness.run — local mode end-to-end with mock + tiny fixture"
 ```
 
 ---
 
-### Task 8: `pae run` CLI subcommand
+### Task 8: `cae run` CLI subcommand
 
 **Files:**
-- Modify: `pae/cli.py`
+- Modify: `cae/cli.py`
 - Modify: `tests/test_cli.py`
 
 - [ ] **Step 1: Write the failing test**
@@ -1314,7 +1314,7 @@ def test_cae_run_writes_result_json(tmp_path, tiny_task_path):
 Run: `pytest tests/test_cli.py::test_cae_run_writes_result_json -v`
 Expected: FAIL with `error: unrecognized arguments: run` or similar
 
-- [ ] **Step 3: Update `pae/cli.py`**
+- [ ] **Step 3: Update `cae/cli.py`**
 
 ```python
 """Command-line interface for cae."""
@@ -1371,7 +1371,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
     if args.version:
-        from pae import __version__
+        from cae import __version__
         print(__version__)
         return 0
     if not getattr(args, "command", None):
@@ -1389,23 +1389,23 @@ if __name__ == "__main__":
 Run: `pytest tests/test_cli.py -v`
 Expected: PASS (2 tests: the original help test and the new run test)
 
-- [ ] **Step 5: Manually smoke-test `pae run` end-to-end**
+- [ ] **Step 5: Manually smoke-test `cae run` end-to-end**
 
 Run:
 ```
 cd /Users/sarace/dev/probe/agent_eval
-python -m cae run --agent mock --task tiny__task-1 --tasks-dir tests/fixtures/tasks --results-dir /tmp/pae-smoke
+python -m cae run --agent mock --task tiny__task-1 --tasks-dir tests/fixtures/tasks --results-dir /tmp/cae-smoke
 ```
 Note: the test fixture isn't at `tests/fixtures/tasks` — it's at `tests/fixtures/tiny_task`. Adjust: `--tasks-dir tests/fixtures` and `--task tiny_task`.
 
-Run: `python -m cae run --agent mock --task tiny_task --tasks-dir tests/fixtures --results-dir /tmp/pae-smoke`
-Expected: `wrote /tmp/pae-smoke/<run_id>.json`, `status: failed` (because the mock doesn't fix the bug).
+Run: `python -m cae run --agent mock --task tiny_task --tasks-dir tests/fixtures --results-dir /tmp/cae-smoke`
+Expected: `wrote /tmp/cae-smoke/<run_id>.json`, `status: failed` (because the mock doesn't fix the bug).
 
 - [ ] **Step 6: Commit**
 
 ```bash
-git add pae/cli.py tests/test_cli.py
-git commit -m "Task 8: pae run CLI subcommand — vertical slice end-to-end"
+git add cae/cli.py tests/test_cli.py
+git commit -m "Task 8: cae run CLI subcommand — vertical slice end-to-end"
 ```
 
 **After Task 8:** the vertical slice is working. `cae run --agent mock --task <task>` produces a result JSON. Everything below is iteration.
@@ -1417,9 +1417,9 @@ git commit -m "Task 8: pae run CLI subcommand — vertical slice end-to-end"
 ### Task 9: SWE-bench Importer
 
 **Files:**
-- Create: `pae/importer.py`
+- Create: `cae/importer.py`
 - Create: `tests/test_importer.py`
-- Modify: `pae/cli.py` (add `add-task` subcommand)
+- Modify: `cae/cli.py` (add `add-task` subcommand)
 - Modify: `tests/test_cli.py`
 
 - [ ] **Step 1: Write the failing test (importer core)**
@@ -1483,9 +1483,9 @@ def test_import_fetches_repo_into_repo_dir(tmp_path, sample_record):
 - [ ] **Step 2: Run test to verify it fails**
 
 Run: `pytest tests/test_importer.py -v`
-Expected: FAIL with `ModuleNotFoundError: No module named 'pae.importer'`
+Expected: FAIL with `ModuleNotFoundError: No module named 'cae.importer'`
 
-- [ ] **Step 3: Create `pae/importer.py`**
+- [ ] **Step 3: Create `cae/importer.py`**
 
 ```python
 """SWE-bench Verified importer: pulls task metadata and (optionally) the repo state.
@@ -1638,9 +1638,9 @@ def load_swebench_records(
 Run: `pytest tests/test_importer.py -v`
 Expected: PASS (3 tests)
 
-- [ ] **Step 5: Add `add-task` subcommand to `pae/cli.py`**
+- [ ] **Step 5: Add `add-task` subcommand to `cae/cli.py`**
 
-Append to `build_parser` in `pae/cli.py`:
+Append to `build_parser` in `cae/cli.py`:
 
 ```python
     p_add = sub.add_parser("add-task", help="add a new task under tasks/")
@@ -1716,8 +1716,8 @@ Expected: PASS (3 tests; the new one may pass-via-skip if HF is unavailable)
 - [ ] **Step 8: Commit**
 
 ```bash
-git add pae/importer.py pae/cli.py tests/test_importer.py tests/test_cli.py
-git commit -m "Task 9: SWE-bench importer + pae add-task CLI"
+git add cae/importer.py cae/cli.py tests/test_importer.py tests/test_cli.py
+git commit -m "Task 9: SWE-bench importer + cae add-task CLI"
 ```
 
 ---
@@ -1782,8 +1782,8 @@ git commit -m "Task 10: smoke test docs"
 ### Task 11: Claude Code Adapter
 
 **Files:**
-- Create: `pae/agents/claude_code.py`
-- Modify: `pae/agents/__init__.py` (register adapter)
+- Create: `cae/agents/claude_code.py`
+- Modify: `cae/agents/__init__.py` (register adapter)
 - Modify: `tests/test_agents.py` (add adapter-specific tests)
 
 - [ ] **Step 1: Write the failing test**
@@ -1827,9 +1827,9 @@ def test_claude_code_parse_output_extracts_usage():
 - [ ] **Step 2: Run test to verify it fails**
 
 Run: `pytest tests/test_agents.py -v`
-Expected: FAIL with `ModuleNotFoundError: No module named 'pae.agents.claude_code'`
+Expected: FAIL with `ModuleNotFoundError: No module named 'cae.agents.claude_code'`
 
-- [ ] **Step 3: Create `pae/agents/claude_code.py`**
+- [ ] **Step 3: Create `cae/agents/claude_code.py`**
 
 ```python
 """Claude Code CLI adapter.
@@ -1906,9 +1906,9 @@ class ClaudeCodeAdapter:
         )
 ```
 
-- [ ] **Step 4: Register in `pae/agents/__init__.py`**
+- [ ] **Step 4: Register in `cae/agents/__init__.py`**
 
-Replace the `ADAPTERS` dict in `pae/agents/__init__.py`:
+Replace the `ADAPTERS` dict in `cae/agents/__init__.py`:
 
 ```python
 ADAPTERS: dict[str, type[AgentAdapter]] = {
@@ -1927,7 +1927,7 @@ Expected: PASS (10 tests: 7 original + 3 new)
 - [ ] **Step 6: Commit**
 
 ```bash
-git add pae/agents/claude_code.py pae/agents/__init__.py tests/test_agents.py
+git add cae/agents/claude_code.py cae/agents/__init__.py tests/test_agents.py
 git commit -m "Task 11: Claude Code adapter"
 ```
 
@@ -1936,8 +1936,8 @@ git commit -m "Task 11: Claude Code adapter"
 ### Task 12: Codex Adapter
 
 **Files:**
-- Create: `pae/agents/codex.py`
-- Modify: `pae/agents/__init__.py`
+- Create: `cae/agents/codex.py`
+- Modify: `cae/agents/__init__.py`
 - Modify: `tests/test_agents.py`
 
 - [ ] **Step 1: Write the failing test**
@@ -1973,7 +1973,7 @@ def test_codex_parse_output_extracts_usage():
 Run: `pytest tests/test_agents.py::test_codex_adapter_build_command_includes_prompt -v`
 Expected: FAIL with `ModuleNotFoundError`
 
-- [ ] **Step 3: Create `pae/agents/codex.py`**
+- [ ] **Step 3: Create `cae/agents/codex.py`**
 
 ```python
 """Codex CLI adapter.
@@ -2044,7 +2044,7 @@ class CodexAdapter:
 
 - [ ] **Step 4: Register**
 
-In `pae/agents/__init__.py`:
+In `cae/agents/__init__.py`:
 
 ```python
 from cae.agents.codex import CodexAdapter
@@ -2064,7 +2064,7 @@ Expected: PASS (12 tests)
 - [ ] **Step 6: Commit**
 
 ```bash
-git add pae/agents/codex.py pae/agents/__init__.py tests/test_agents.py
+git add cae/agents/codex.py cae/agents/__init__.py tests/test_agents.py
 git commit -m "Task 12: Codex adapter"
 ```
 
@@ -2073,8 +2073,8 @@ git commit -m "Task 12: Codex adapter"
 ### Task 13: Aider Adapter
 
 **Files:**
-- Create: `pae/agents/aider.py`
-- Modify: `pae/agents/__init__.py`
+- Create: `cae/agents/aider.py`
+- Modify: `cae/agents/__init__.py`
 - Modify: `tests/test_agents.py`
 
 - [ ] **Step 1: Write the failing test**
@@ -2105,7 +2105,7 @@ def test_aider_parse_output_no_native_json():
 Run: `pytest tests/test_agents.py::test_aider_adapter_build_command_includes_prompt -v`
 Expected: FAIL with `ModuleNotFoundError`
 
-- [ ] **Step 3: Create `pae/agents/aider.py`**
+- [ ] **Step 3: Create `cae/agents/aider.py`**
 
 ```python
 """Aider CLI adapter.
@@ -2159,7 +2159,7 @@ class AiderAdapter:
 
 - [ ] **Step 4: Register**
 
-In `pae/agents/__init__.py`:
+In `cae/agents/__init__.py`:
 
 ```python
 from cae.agents.aider import AiderAdapter
@@ -2180,7 +2180,7 @@ Expected: PASS (14 tests)
 - [ ] **Step 6: Commit**
 
 ```bash
-git add pae/agents/aider.py pae/agents/__init__.py tests/test_agents.py
+git add cae/agents/aider.py cae/agents/__init__.py tests/test_agents.py
 git commit -m "Task 13: Aider adapter"
 ```
 
@@ -2189,7 +2189,7 @@ git commit -m "Task 13: Aider adapter"
 ### Task 14: `cae list-agents` CLI
 
 **Files:**
-- Modify: `pae/cli.py`
+- Modify: `cae/cli.py`
 - Modify: `tests/test_cli.py`
 
 - [ ] **Step 1: Write the failing test**
@@ -2212,7 +2212,7 @@ def test_cae_list_agents(capsys):
 Run: `pytest tests/test_cli.py::test_cae_list_agents -v`
 Expected: FAIL with `unrecognized arguments: list-agents`
 
-- [ ] **Step 3: Add `list-agents` to `pae/cli.py`**
+- [ ] **Step 3: Add `list-agents` to `cae/cli.py`**
 
 Add a command function before `build_parser`:
 
@@ -2241,7 +2241,7 @@ Expected: PASS (4 tests)
 - [ ] **Step 5: Commit**
 
 ```bash
-git add pae/cli.py tests/test_cli.py
+git add cae/cli.py tests/test_cli.py
 git commit -m "Task 14: cae list-agents CLI"
 ```
 
@@ -2252,7 +2252,7 @@ git commit -m "Task 14: cae list-agents CLI"
 ### Task 15: Metrics Module
 
 **Files:**
-- Create: `pae/metrics.py`
+- Create: `cae/metrics.py`
 - Create: `tests/test_metrics.py`
 
 - [ ] **Step 1: Write the failing test**
@@ -2336,7 +2336,7 @@ def test_aggregate_handles_null_cost(two_results_dir):
 Run: `pytest tests/test_metrics.py -v`
 Expected: FAIL with `ModuleNotFoundError`
 
-- [ ] **Step 3: Create `pae/metrics.py`**
+- [ ] **Step 3: Create `cae/metrics.py`**
 
 ```python
 """Aggregate result JSONs into leaderboard rows.
@@ -2401,7 +2401,7 @@ Expected: PASS (5 tests)
 - [ ] **Step 5: Commit**
 
 ```bash
-git add pae/metrics.py tests/test_metrics.py
+git add cae/metrics.py tests/test_metrics.py
 git commit -m "Task 15: metrics.aggregate_results"
 ```
 
@@ -2410,11 +2410,11 @@ git commit -m "Task 15: metrics.aggregate_results"
 ### Task 16: `cae report` CLI
 
 **Files:**
-- Create: `pae/render_table.py` (hand-rolled console table)
-- Modify: `pae/cli.py`
+- Create: `cae/render_table.py` (hand-rolled console table)
+- Modify: `cae/cli.py`
 - Modify: `tests/test_cli.py`
 
-- [ ] **Step 1: Create `pae/render_table.py`**
+- [ ] **Step 1: Create `cae/render_table.py`**
 
 ```python
 """Hand-rolled console table renderer. No external deps."""
@@ -2438,7 +2438,7 @@ def render_table(headers: list[str], rows: list[list[str]]) -> str:
     return "\n".join(lines)
 ```
 
-- [ ] **Step 2: Add `report` subcommand to `pae/cli.py`**
+- [ ] **Step 2: Add `report` subcommand to `cae/cli.py`**
 
 Add before `build_parser`:
 
@@ -2509,8 +2509,8 @@ Expected: PASS (5 tests)
 - [ ] **Step 5: Commit**
 
 ```bash
-git add pae/render_table.py pae/cli.py tests/test_cli.py
-git commit -m "Task 16: pae report --format table"
+git add cae/render_table.py cae/cli.py tests/test_cli.py
+git commit -m "Task 16: cae report --format table"
 ```
 
 ---
@@ -2518,9 +2518,9 @@ git commit -m "Task 16: pae report --format table"
 ### Task 17: Static Site
 
 **Files:**
-- Create: `pae/site.py`
+- Create: `cae/site.py`
 - Create: `tests/test_site.py`
-- Modify: `pae/cli.py` (add `build-site` subcommand)
+- Modify: `cae/cli.py` (add `build-site` subcommand)
 - Create: `site/vendor/.gitkeep`
 
 - [ ] **Step 1: Write the failing test**
@@ -2577,7 +2577,7 @@ def test_build_site_creates_per_task_page(site_inputs):
 Run: `pytest tests/test_site.py -v`
 Expected: FAIL with `ModuleNotFoundError`
 
-- [ ] **Step 3: Create `pae/site.py`**
+- [ ] **Step 3: Create `cae/site.py`**
 
 ```python
 """Build a static leaderboard site from results/*.json.
@@ -2741,7 +2741,7 @@ def build_site(results_dir: Path, out_dir: Path, docs_dir: Path | None = None) -
 Run: `pytest tests/test_site.py -v`
 Expected: PASS (3 tests)
 
-- [ ] **Step 5: Add `build-site` subcommand to `pae/cli.py`**
+- [ ] **Step 5: Add `build-site` subcommand to `cae/cli.py`**
 
 Add before `build_parser`:
 
@@ -2776,8 +2776,8 @@ In `build_parser`:
 - [ ] **Step 7: Commit**
 
 ```bash
-git add pae/site.py tests/test_site.py pae/cli.py site/vendor/.gitkeep
-git commit -m "Task 17: pae build-site (static leaderboard)"
+git add cae/site.py tests/test_site.py cae/cli.py site/vendor/.gitkeep
+git commit -m "Task 17: cae build-site (static leaderboard)"
 ```
 
 ---
@@ -2785,7 +2785,7 @@ git commit -m "Task 17: pae build-site (static leaderboard)"
 ### Task 18: Reproducibility doc + Markdown renderer
 
 **Files:**
-- Create: `pae/render_markdown.py`
+- Create: `cae/render_markdown.py`
 - Create: `tests/test_render_markdown.py`
 - Create: `docs/reproducibility.md`
 
@@ -2813,8 +2813,8 @@ def test_renders_code_block():
 
 
 def test_renders_inline_code():
-    html = render_markdown("run `pae run` now")
-    assert "<code>pae run</code>" in html
+    html = render_markdown("run `cae run` now")
+    assert "<code>cae run</code>" in html
 
 
 def test_renders_link():
@@ -2833,7 +2833,7 @@ def test_renders_doctype_and_body():
 Run: `pytest tests/test_render_markdown.py -v`
 Expected: FAIL with `ModuleNotFoundError`
 
-- [ ] **Step 3: Create `pae/render_markdown.py`**
+- [ ] **Step 3: Create `cae/render_markdown.py`**
 
 ```python
 """Tiny markdown → HTML renderer for docs/reproducibility.md.
@@ -2935,7 +2935,7 @@ Each `results/<run_id>.json` captures:
 Given a row, find the `agent` and the task list, then run:
 
 ```
-pae run --agent <agent> --task <task_id> [--docker]
+cae run --agent <agent> --task <task_id> [--docker]
 ```
 
 For the official leaderboard, always use `--docker` so the run is reproducible across machines. Without it, results depend on the local Python/library versions in the workdir.
@@ -2948,7 +2948,7 @@ If the SWE-bench dataset is updated, old results can still be re-run because `ta
 - [ ] **Step 6: Commit**
 
 ```bash
-git add pae/render_markdown.py tests/test_render_markdown.py docs/reproducibility.md
+git add cae/render_markdown.py tests/test_render_markdown.py docs/reproducibility.md
 git commit -m "Task 18: reproducibility.md + tiny markdown renderer"
 ```
 
@@ -2959,11 +2959,11 @@ git commit -m "Task 18: reproducibility.md + tiny markdown renderer"
 ### Task 19: CLI polish (resume, --repeat, --force, --keep-workdir, --fetch-fresh)
 
 **Files:**
-- Modify: `pae/cli.py`
-- Modify: `pae/harness.py`
+- Modify: `cae/cli.py`
+- Modify: `cae/harness.py`
 - Modify: `tests/test_cli.py`
 
-- [ ] **Step 1: Extend `cmd_run` in `pae/cli.py` to accept these flags and pass them through**
+- [ ] **Step 1: Extend `cmd_run` in `cae/cli.py` to accept these flags and pass them through**
 
 Replace the existing `cmd_run` and `p_run` setup:
 
@@ -3035,7 +3035,7 @@ Update `p_run` flags in `build_parser`:
 
 - [ ] **Step 2: Update `harness.run` to accept the new kwargs**
 
-In `pae/harness.py`, the `run` signature was already extended in Task 7 to include
+In `cae/harness.py`, the `run` signature was already extended in Task 7 to include
 `fetch_fresh`, `keep_workdir`, `docker`, `docker_image`, `env_file`, `repeat`, and
 `repeat_index`. Verify it matches the new `cmd_run` call site; if anything is
 missing, add it.
@@ -3109,7 +3109,7 @@ Expected: PASS (all tests across all files)
 - [ ] **Step 5: Commit**
 
 ```bash
-git add pae/cli.py pae/harness.py tests/test_cli.py
+git add cae/cli.py cae/harness.py tests/test_cli.py
 git commit -m "Task 19: CLI polish (resume, --repeat, --force, --keep-workdir, --fetch-fresh)"
 ```
 
@@ -3180,17 +3180,17 @@ Public, reproducible benchmark for CLI coding agents. Compare Claude Code, Codex
 
 ```
 pip install -e ".[dev]"
-pae --help
+cae --help
 ```
 
 ## Run a task
 
 ```
 cae list-agents
-cae run --agent mock --task tiny_task --tasks-dir tests/fixtures --results-dir /tmp/pae
+cae run --agent mock --task tiny_task --tasks-dir tests/fixtures --results-dir /tmp/cae
 ```
 
-The result is written to `/tmp/pae/<run_id>.json`.
+The result is written to `/tmp/cae/<run_id>.json`.
 
 ## Add tasks
 
@@ -3208,7 +3208,7 @@ Or by hand: see `docs/adding-tasks.md`.
 cae build-site --results-dir results --out-dir site
 ```
 
-Deploy `site/` to GitHub Pages (or run `pae build-site --publish` to push via the `gh` CLI).
+Deploy `site/` to GitHub Pages (or run `cae build-site --publish` to push via the `gh` CLI).
 
 ## Development
 
@@ -3289,7 +3289,7 @@ def test_full_vertical_slice_replay(tmp_path, tiny_task_path):
 
 
 def test_aggregate_after_run(tmp_path, tiny_task_path):
-    """After a run, pae report and pae build-site should work end-to-end."""
+    """After a run, cae report and cae build-site should work end-to-end."""
     proj = tmp_path
     tasks = proj / "tasks" / "tiny_task"
     tasks.mkdir(parents=True)
@@ -3350,10 +3350,10 @@ git commit -m "Task 21: end-to-end integration test (full vertical slice)"
 ### Task 22: Docker Mode
 
 **Files:**
-- Create: `pae/docker_run.py`
+- Create: `cae/docker_run.py`
 - Create: `tests/test_docker_run.py`
-- Modify: `pae/harness.py`
-- Modify: `pae/cli.py`
+- Modify: `cae/harness.py`
+- Modify: `cae/cli.py`
 - Modify: `tests/test_cli.py`
 
 - [ ] **Step 1: Write the failing test (docker_run helpers)**
@@ -3407,7 +3407,7 @@ def test_exec_in_passes_env_file_when_provided():
 Run: `pytest tests/test_docker_run.py -v`
 Expected: FAIL with `ModuleNotFoundError`
 
-- [ ] **Step 3: Create `pae/docker_run.py`**
+- [ ] **Step 3: Create `cae/docker_run.py`**
 
 ```python
 """Helpers for running the harness inside a Docker container (--docker mode)."""
@@ -3464,13 +3464,13 @@ Expected: PASS (4 tests)
 - [ ] **Step 5: Confirm harness docker wiring (already done in Task 7)**
 
 Task 7's `harness.run` already includes the `run_step` closure that dispatches to
-`exec_in` when `docker=True`. Verify by reading `pae/harness.py`; no code changes
+`exec_in` when `docker=True`. Verify by reading `cae/harness.py`; no code changes
 needed for this step.
 
 - [ ] **Step 6: Confirm CLI docker flags (already done in Task 19)**
 
 Task 19's `p_run` setup already adds `--docker`, `--docker-image`, and `--env-file`,
-and `cmd_run` already passes them to `harness.run`. Verify by reading `pae/cli.py`;
+and `cmd_run` already passes them to `harness.run`. Verify by reading `cae/cli.py`;
 no code changes needed for this step.
 
 - [ ] **Step 7: Add a CLI test for `--docker` (mocked — actual docker not required)**
@@ -3527,7 +3527,7 @@ Expected: all tests pass (or skip cleanly if docker is not available)
 - [ ] **Step 9: Commit**
 
 ```bash
-git add pae/docker_run.py tests/test_docker_run.py pae/harness.py pae/cli.py tests/test_cli.py
+git add cae/docker_run.py tests/test_docker_run.py cae/harness.py cae/cli.py tests/test_cli.py
 git commit -m "Task 22: Docker mode (--docker, --docker-image, --env-file)"
 ```
 

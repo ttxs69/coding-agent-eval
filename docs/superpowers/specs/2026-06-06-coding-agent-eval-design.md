@@ -26,13 +26,13 @@ A public, open-source benchmark for evaluating CLI-based coding agents (Claude C
 
 ## Architecture
 
-Single Python package `probe-agent-eval` (CLI: `pae`). All components are in one repo for v1; split only when a second contributor arrives.
+Single Python package `probe-agent-eval` (CLI: `cae`). All components are in one repo for v1; split only when a second contributor arrives.
 
 ```
 probe-agent-eval/
-├── pyproject.toml             # one Python package, "pae" CLI
-├── pae/                       # source
-│   ├── cli.py                 # entry point: pae run / build-site / add-task / list-agents / report
+├── pyproject.toml             # one Python package, "cae" CLI
+├── cae/                       # source
+│   ├── cli.py                 # entry point: cae run / build-site / add-task / list-agents / report
 │   ├── harness.py             # run loop: fetch repo, apply test patch, run agent, capture patch, grade
 │   ├── grader.py              # run test_cmd in workdir, parse per-test results into {test_name: status}
 │   ├── importer.py            # cae add-task --from-swebench: pull, transform, write task
@@ -62,7 +62,7 @@ probe-agent-eval/
 ```
 
 **Key decisions:**
-- **One Python package, one CLI.** `pae run`, `cae build-site`, `pae add-task`, `cae list-agents`, `cae report`.
+- **One Python package, one CLI.** `cae run`, `cae build-site`, `cae add-task`, `cae list-agents`, `cae report`.
 - **Results are committed JSON.** No database. Reproducibility = "this commit shows the state of the leaderboard on date X."
 - **Site is built, not served.** `cae build-site` writes `site/`; user pushes to GitHub Pages / S3 / `gh-pages` branch.
 
@@ -93,7 +93,7 @@ Tasks live at `tasks/<owner__repo__id>/task.json`. Format is SWE-bench-compatibl
 
 ## Importing Tasks from SWE-bench
 
-Tasks are not hand-authored in v1 — the first **50 tasks** come from a one-shot import of [SWE-bench Verified](https://huggingface.co/datasets/princeton-nlp/SWE-bench_Verified), the 500-problem human-validated subset curated with OpenAI. The importer is a core `pae add-task` mode, not a side script:
+Tasks are not hand-authored in v1 — the first **50 tasks** come from a one-shot import of [SWE-bench Verified](https://huggingface.co/datasets/princeton-nlp/SWE-bench_Verified), the 500-problem human-validated subset curated with OpenAI. The importer is a core `cae add-task` mode, not a side script:
 
 ```bash
 # Import a single instance
@@ -120,7 +120,7 @@ cae add-task --from-swebench --dataset-path /path/to/SWE-bench --split verified
 
 ## Agent Interface
 
-Defined as a `Protocol` in `pae/agents/base.py` so each adapter is free to handle its CLI's quirks without forcing a shared implementation.
+Defined as a `Protocol` in `cae/agents/base.py` so each adapter is free to handle its CLI's quirks without forcing a shared implementation.
 
 ```python
 class AgentAdapter(Protocol):
@@ -163,10 +163,10 @@ A `MockAdapter` ships as a first-class adapter (registered alongside Claude Code
 ## Run Lifecycle
 
 ```
-pae run --agent claude --task django-12345 [--docker] [--timeout 30m] [--repeat N]
+cae run --agent claude --task django-12345 [--docker] [--timeout 30m] [--repeat N]
    │
    ├─ 1. Resolve task → load tasks/django__django-12345/task.json
-   ├─ 2. Create workdir (temp dir; /tmp/pae-XXXX or ~/.cache/pae/work)
+   ├─ 2. Create workdir (temp dir; /tmp/cae-XXXX or ~/.cache/cae/work)
    ├─ 3. Fetch repo into workdir
    │     ├─ Local:  copy tasks/<id>/repo/ → workdir (offline, deterministic, default)
    │     │          --fetch-fresh: git clone <repo> workdir && git checkout <base_commit> (network, up-to-date)
@@ -228,7 +228,7 @@ Broken tasks and agent crashes must not silently count as "failed" alongside leg
 
 - **Timeout**: default 30 min per agent run, configurable. Killed cleanly; patch captured up to kill point.
 - **Workdir cleanup**: default delete after run. `--keep-workdir` prints the path in the result JSON for debugging.
-- **Resume**: if any result file for the requested (task, agent) pair already exists in `results/`, skip with a warning. `--force` to overwrite. With `--repeat N`, runs whose index already has a result file are skipped; missing indices are run. Interrupted batches are restartable by re-running the same `pae run` command.
+- **Resume**: if any result file for the requested (task, agent) pair already exists in `results/`, skip with a warning. `--force` to overwrite. With `--repeat N`, runs whose index already has a result file are skipped; missing indices are run. Interrupted batches are restartable by re-running the same `cae run` command.
 - **Concurrency**: v1 is single-threaded. A `--parallel N` flag can come later.
 
 ## Output JSON
@@ -258,7 +258,7 @@ Broken tasks and agent crashes must not silently count as "failed" alongside leg
     }
   },
   "patch": "diff --git a/...",
-  "workdir": "/tmp/pae-XXXX"
+  "workdir": "/tmp/cae-XXXX"
 }
 ```
 
@@ -296,11 +296,11 @@ Plain HTML + ~50 lines of vanilla JS for sorting. No React, no bundler, no build
 
 ### Hosting
 
-User pushes `site/` to `gh-pages` branch, or `pae build-site --publish` shells out to the `gh` CLI. We do not bundle our own deployer.
+User pushes `site/` to `gh-pages` branch, or `cae build-site --publish` shells out to the `gh` CLI. We do not bundle our own deployer.
 
 ### Console reporting (local dev)
 
-The static site is the canonical published view, but for local development `pae report --format table` prints a console table of aggregated metrics for all `results/*.json` files in the current directory, sorted by `pass_rate` descending by default, reusing the same aggregation logic as `cae build-site`. This is the same data the site shows, just printed to stdout — no separate code path. Useful when iterating on a task or comparing two agents in the terminal without leaving to look at a browser.
+The static site is the canonical published view, but for local development `cae report --format table` prints a console table of aggregated metrics for all `results/*.json` files in the current directory, sorted by `pass_rate` descending by default, reusing the same aggregation logic as `cae build-site`. This is the same data the site shows, just printed to stdout — no separate code path. Useful when iterating on a task or comparing two agents in the terminal without leaving to look at a browser.
 
 ## Reproducibility
 
@@ -310,7 +310,7 @@ Every result JSON captures everything needed to reproduce a single number:
 - `started_at`, harness `git_sha` (added by harness at write time)
 - Full `patch` and `test_results`
 
-The site footer links to `reproducibility.html`. The source `docs/reproducibility.md` is hand-written at the project root and copied (markdown → HTML, rendered with a small inline renderer — no external dependency) to `site/reproducibility.html` by `cae build-site`. No magic, no hidden state. The doc content: "to reproduce row X, run `pae run --agent X --task <list> --docker` with this harness SHA."
+The site footer links to `reproducibility.html`. The source `docs/reproducibility.md` is hand-written at the project root and copied (markdown → HTML, rendered with a small inline renderer — no external dependency) to `site/reproducibility.html` by `cae build-site`. No magic, no hidden state. The doc content: "to reproduce row X, run `cae run --agent X --task <list> --docker` with this harness SHA."
 
 ## Testing Strategy
 
@@ -320,7 +320,7 @@ The harness itself must be tested, not just trusted. Three layers:
 2. **Integration tests** for the run loop, using the `MockAdapter` (which writes a pre-canned patch to the workdir) end-to-end against a tiny fixture task. This exercises the full local flow (clone, apply test patch, setup, pre-flight, agent, grade, write result) with a known-bug-and-known-fix task. Integration tests use a small local fixture repo committed to the repo, not network.
 3. **Live smoke test** (manual, not in CI): one real task, one real agent, on a developer machine. Catches environment issues that mocks can't. Documented in `docs/smoke-test.md`.
 
-A test task fixture is checked in at `pae/tests/fixtures/tiny_task/` (under the package, not at the project root, to avoid confusion with the user-facing `tasks/` directory) with a known-bug-and-known-fix so the integration test has a deterministic expected outcome.
+A test task fixture is checked in at `cae/tests/fixtures/tiny_task/` (under the package, not at the project root, to avoid confusion with the user-facing `tasks/` directory) with a known-bug-and-known-fix so the integration test has a deterministic expected outcome.
 
 ## Open Questions (Resolved During Brainstorming)
 
@@ -331,4 +331,4 @@ A test task fixture is checked in at `pae/tests/fixtures/tiny_task/` (under the 
 - **Q: Local or Docker first?** A: Local default, Docker opt-in.
 - **Q: Hand-author tasks or import?** A: Import SWE-bench Verified for v1; hand-authored tasks can supplement later.
 - **Q: Concurrency in v1?** A: Single-threaded. `--parallel N` deferred.
-- **Q: Public reporting?** A: Static site is canonical; `pae report --format table` is the local-dev view.
+- **Q: Public reporting?** A: Static site is canonical; `cae report --format table` is the local-dev view.

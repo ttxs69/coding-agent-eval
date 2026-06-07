@@ -119,7 +119,7 @@ class Container:
             f"--network={self.network}",
             "-v", f"{self.workdir.resolve()}:/work",
             "-w", "/work",
-            "--label", "pae.managed=true",
+            "--label", "cae.managed=true",
         ]
         if self.env_file:
             args += ["--env-file", str(self.env_file)]

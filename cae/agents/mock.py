@@ -1,7 +1,7 @@
 """MockAdapter: a no-op CLI stub for harness smoke tests and unit tests.
 
 This adapter is for tests and smoke runs only. It is registered as a first-class
-adapter so the harness exercises every code path, but pae build-site filters
+adapter so the harness exercises every code path, but cae build-site filters
 its results out of the public leaderboard. The default mock does NOT modify
 the workdir — tests that need a known patch should pre-apply the patch to the
 workdir before calling harness.run.

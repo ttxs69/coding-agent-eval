@@ -1,4 +1,4 @@
-"""Agent adapters for pae.
+"""Agent adapters for cae.
 
 ADAPTERS is the registry used by get_adapter() and list_adapters(). New adapters
 import their class and add an entry here.
