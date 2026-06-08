@@ -26,20 +26,25 @@ A public, open-source benchmark for evaluating CLI-based coding agents (Claude C
 
 ## Architecture
 
-Single Python package `probe-agent-eval` (CLI: `cae`). All components are in one repo for v1; split only when a second contributor arrives.
+Single Python package `coding-agent-eval` (CLI: `cae`). All components are in one repo for v1; split only when a second contributor arrives.
 
 ```
-probe-agent-eval/
-├── pyproject.toml             # one Python package, "cae" CLI
+coding-agent-eval/
+├── pyproject.toml             # one Python package, "cae" CLI (uv-managed, Python 3.10 pinned)
+├── uv.lock                    # committed lockfile for reproducible installs
 ├── cae/                       # source
 │   ├── cli.py                 # entry point: cae run / build-site / add-task / list-agents / report
 │   ├── harness.py             # run loop: fetch repo, apply test patch, run agent, capture patch, grade
 │   ├── grader.py              # run test_cmd in workdir, parse per-test results into {test_name: status}
-│   ├── importer.py            # cae add-task --from-swebench: pull, transform, write task
+│   ├── importer.py            # cae add-task --from-swebench: pull, transform, write task (with test-ID validation)
 │   ├── metrics.py             # aggregation over results/*.json (used by build-site and report)
 │   ├── site.py                # build static leaderboard from results/
+│   ├── parsers.py             # per-runner test output parsers (pytest, etc.)
+│   ├── render_table.py        # console table renderer for `cae report`
+│   ├── render_markdown.py     # minimal markdown renderer for the reproducibility page
+│   ├── docker_run.py          # optional --docker mode (Container class for stateful execs)
 │   └── agents/                # one file per agent
-│       ├── base.py            # AgentAdapter protocol
+│       ├── base.py            # AgentAdapter Protocol, AgentResult, UsageInfo, Status, TestStatus
 │       ├── claude_code.py
 │       ├── codex.py
 │       ├── aider.py
@@ -51,24 +56,27 @@ probe-agent-eval/
 │       └── tests.patch        # hidden test patch (git-applied before pre-flight; no-op for hand-authored tasks)
 ├── results/                   # JSON output of runs (committed)
 │   └── 2026-06-06T12-34-56__claude__django-12345.json
-├── site/                      # generated static leaderboard
+├── site/                      # generated static leaderboard (gitignored)
 │   ├── index.html             # sortable table of agent × task
 │   ├── tasks/<id>.html        # per-task detail
 │   ├── reproducibility.html   # copied from docs/reproducibility.md
 │   └── data/results.json      # aggregate for the table
 ├── docs/                      # how to add tasks, run evals, etc.
 │   └── reproducibility.md     # source for site/reproducibility.html
+├── scripts/                   # helper scripts
+│   └── run_eval.sh            # wrapper that loops `cae run` over tasks × agents
 └── .github/workflows/         # optional: scheduled leaderboard refresh
 ```
 
 **Key decisions:**
 - **One Python package, one CLI.** `cae run`, `cae build-site`, `cae add-task`, `cae list-agents`, `cae report`.
+- **uv-managed env.** Python pinned to 3.10 in `pyproject.toml` (old astropy's C extensions don't build on 3.11+). The `astropy-build` extra ships the pinned `setuptools<60` toolchain needed for the SWE-bench task setups.
 - **Results are committed JSON.** No database. Reproducibility = "this commit shows the state of the leaderboard on date X."
 - **Site is built, not served.** `cae build-site` writes `site/`; user pushes to GitHub Pages / S3 / `gh-pages` branch.
 
 ## Task Format
 
-Tasks live at `tasks/<owner__repo__id>/task.json`. Format is SWE-bench-compatible; the first 50 tasks are imported from SWE-bench Verified via `cae add-task --from-swebench` (see the [Importing Tasks from SWE-bench](#importing-tasks-from-swe-bench) section).
+Tasks live at `tasks/<owner__repo__id>/task.json`. Format is SWE-bench-compatible; tasks are imported from SWE-bench Verified via `cae add-task --from-swebench` (see the [Importing Tasks from SWE-bench](#importing-tasks-from-swe-bench) section). The default `--limit` is whatever the caller chooses; ~20 is a good cheap run.
 
 ```json
 {
@@ -79,44 +87,47 @@ Tasks live at `tasks/<owner__repo__id>/task.json`. Format is SWE-bench-compatibl
   "framework": "django",
   "difficulty": "medium",
   "prompt": "Title + body of the issue, verbatim or paraphrased.",
-  "setup_cmd": "pip install -e . && pip install -r requirements.txt",
-  "test_cmd": "python -m pytest tests/path/to/test_x.py -x",
+  "setup_cmd": "pip install -e .[test] --no-build-isolation",
+  "test_cmd": "python -m pytest -vs tests/path/to/test_x.py",
   "fail_to_pass": ["tests.test_x.TestFoo.test_bar"],
   "pass_to_pass": ["tests.test_x.TestFoo.test_baz"]
 }
 ```
 
 - **`prompt` is what the agent sees.** The harness is free to support multiple prompt variants per task in the future (zero-shot, with hints, with repo context) to measure prompt sensitivity.
-- **`setup_cmd` runs in both modes**: locally in the workdir, or via `docker exec` in Docker mode. The Docker image provides a baseline environment; `setup_cmd` typically installs language-specific deps (e.g. `pip install -e .`) on top of it.
+- **`setup_cmd` runs in both modes**: locally in the workdir, or via `docker exec` in Docker mode. The Docker image provides a baseline environment; `setup_cmd` typically installs language-specific deps (e.g. `pip install -e .[test]`) on top of it. Old astropy tasks need `--no-build-isolation` and a pinned `setuptools<60` toolchain (the `astropy-build` extra provides the latter).
+- **`test_cmd`** is auto-narrowed by the importer to the test files referenced by `fail_to_pass`/`pass_to_pass`, so we don't run (and fail) unrelated tests in the same repo. The `--x` flag is dropped because it would stop pytest at the first failure and prevent grading of subsequent FAIL_TO_PASS tests.
 - **`fail_to_pass` / `pass_to_pass` are graded by test name, not by exit code.** More robust to flaky runners and partial fixes.
 - The base repo can be stored as a checked-in directory under `repo/` (the importer default), a git submodule, or a git LFS pointer — implementation detail.
 
 ## Importing Tasks from SWE-bench
 
-Tasks are not hand-authored in v1 — the first **50 tasks** come from a one-shot import of [SWE-bench Verified](https://huggingface.co/datasets/princeton-nlp/SWE-bench_Verified), the 500-problem human-validated subset curated with OpenAI. The importer is a core `cae add-task` mode, not a side script:
+Tasks are not hand-authored in v1 — they come from a one-shot import of [SWE-bench Verified](https://huggingface.co/datasets/princeton-nlp/SWE-bench_Verified), the 500-problem human-validated subset curated with OpenAI. The importer is a core `cae add-task` mode, not a side script:
 
 ```bash
 # Import a single instance
 cae add-task --from-swebench django__django-12345
 
-# Import a named subset
-cae add-task --from-swebench --split verified --limit 50
+# Import a named subset (the dataset's only split is named "test", not "verified")
+cae add-task --from-swebench --split test --limit 20
 
 # Import from a local SWE-bench checkout
-cae add-task --from-swebench --dataset-path /path/to/SWE-bench --split verified
+cae add-task --from-swebench --dataset-path /path/to/SWE-bench --split test
 ```
 
 **What the importer does:**
 1. Pulls the instance metadata (`repo`, `base_commit`, `prompt`, `FAIL_TO_PASS`, `PASS_TO_PASS`) from the SWE-bench dataset (HuggingFace `datasets` library or a local clone).
-2. Renames fields to our schema (`FAIL_TO_PASS` → `fail_to_pass`, etc.).
-3. Writes `task.json` to `tasks/<instance_id>/task.json`.
-4. Records the base commit's repo state by shallow-cloning the repo at `base_commit` into `tasks/<id>/repo/`. (Git submodules are NOT used in v1 — the importer always produces a plain directory so the harness's step 3 `cp` works without submodule awareness.)
-5. Records the test patch into `tasks/<id>/tests.patch` for reference and grading.
-6. Sets a `source: {kind: "swe-bench", split: "verified", original_id: "..."}` field in `task.json` for provenance.
+2. Deserializes the JSON-encoded `FAIL_TO_PASS` / `PASS_TO_PASS` strings into Python lists.
+3. Validates the test IDs: filters out ones with unclosed brackets or other obvious truncation (a real SWE-bench data quality issue). Tasks where every test ID is malformed raise `MalformedTestIdsError` and are skipped.
+4. Renames fields to our schema (`FAIL_TO_PASS` → `fail_to_pass`, etc.).
+5. Writes `task.json` to `tasks/<instance_id>/task.json`.
+6. Records the base commit's repo state by shallow-cloning the repo at `base_commit` into `tasks/<id>/repo/`. (Git submodules are NOT used in v1 — the importer always produces a plain directory so the harness's step 3 `cp` works without submodule awareness.)
+7. Records the test patch into `tasks/<id>/tests.patch` for reference and grading.
+8. Sets a `source: {kind: "swe-bench", split: "test", original_id: "..."}` field in `task.json` for provenance.
 
 **Why v1, not v2:** a public leaderboard with zero real tasks is not credible. SWE-bench Verified is the de facto industry baseline (it's what OpenAI, Anthropic, etc. quote numbers from), and importing it for free gives us a comparable dataset on day one. Hand-authored tasks can be added later as supplementary signal.
 
-**Upstream drift:** SWE-bench is stable but not frozen. The importer records the SWE-bench commit hash it imported from in the result metadata, so a result from "SWE-bench @ abc1234" can be re-run for reproducibility.
+**Upstream drift:** SWE-bench is stable but not frozen. The importer records the SWE-bench commit hash it imported from in the result metadata, so a result from "SWE-bench @ abc1234" can be re-run for reproducibility. The dataset's "verified" status lives in the dataset *name* (`princeton-nlp/SWE-bench_Verified`), not in a split name — `--split test` is correct.
 
 ## Agent Interface
 
@@ -145,11 +156,24 @@ class AgentAdapter(Protocol):
 ```python
 @dataclass
 class AgentResult:
-    patch: str             # git diff captured by harness (uniform across agents)
+    patch: str             # raw stdout+stderr for debugging
     log: str               # raw stdout+stderr for debugging
-    usage: UsageInfo       # best-effort: tokens_in, tokens_out, cost_usd, model
+    usage: UsageInfo       # tokens_in, tokens_out, cache_read_tokens, cache_creation_tokens, cost_usd, model
     exit_code: int
     duration_sec: float
+```
+
+`UsageInfo`:
+```python
+@dataclass
+class UsageInfo:
+    tokens_in: int | None                  # uncached fresh input tokens
+    tokens_out: int | None                 # output tokens (incl. reasoning)
+    cache_read_tokens: int | None          # prompt-cache hits
+    cache_creation_tokens: int | None      # prompt-cache writes
+    cost_usd: float | None                 # best-effort from the agent's own accounting
+    model: str | None
+    billing_mode: str = "api"               # "api" or "subscription"
 ```
 
 The harness captures the patch uniformly via `git diff` on the workdir — we do not trust any agent's own diff output. The adapter's only job for patches is to set the working directory and let the agent run.
@@ -179,17 +203,27 @@ cae run --agent claude --task django-12345 [--docker] [--timeout 30m] [--repeat 
    │     └─ Docker: docker exec setup_cmd
    ├─ 6. Pre-flight: run test_cmd, snapshot pass/fail per test name
    │     └─ Validate: fail_to_pass tests currently fail, pass_to_pass currently pass
-   │        (If a task fails this check, mark as task_error, do not run agent)
-   ├─ 7. Run agent
-   │     ├─ Local:  subprocess(agent.build_command(workdir, prompt))
+   │        (If a task fails this check, mark as task_error, do not run agent.
+   │         The error message lists how many tests were missing from pytest
+   │         output vs. how many failed vs. how many unexpectedly passed, so
+   │         users can tell apart "task is broken" from "SWE-bench data
+   │         is broken".)
+   ├─ 7. Capture agent identity (early)
+   │     └─ Instantiate the adapter, record `agent_version` and
+   │        `agent_model` (via `_discover_model()` or `--model` override).
+   │        Done up front so every result row — including task_error
+   │        early-exits — has a model and version, and the leaderboard
+   │        doesn't group pre-flight failures as a separate "(unknown)" row.
+   ├─ 8. Run agent
+   │     ├─ Local:  subprocess(agent.build_command(workdir, prompt, model=model))
    │     └─ Docker: docker exec subprocess(...)  (or docker run with bind-mount)
-   ├─ 8. Capture patch
+   ├─ 9. Capture patch
    │     └─ git diff workdir → patch (uniform, regardless of agent's claims)
-   ├─ 9. Grade
+   ├─ 10. Grade
    │     └─ Re-run test_cmd, parse per-test results
-   ├─ 10. Write results/<timestamp>__<agent>__<task_id>[__<repeat-index>].json
+   ├─ 11. Write results/<timestamp>__<agent>__<task_id>[__<repeat-index>].json
    │      (Repeat-index is omitted when --repeat is 1.)
-   └─ 11. Cleanup workdir (or keep if --keep-workdir, for debugging)
+   └─ 12. Cleanup workdir (or keep if --keep-workdir, for debugging)
 ```
 
 ## Grading
