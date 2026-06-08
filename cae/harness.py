@@ -250,18 +250,29 @@ def run(
 
     def run_step(cmd, cwd, timeout):
         if container is not None:
-            return container.run(
-                cmd if isinstance(cmd, list) else cmd.split(),
-                timeout=timeout,
-            )
+            # In docker mode, run via `sh -c` so the shell handles quoting.
+            # `cmd.split()` would break `pip install -e .[test]` into two args
+            # (`.` and `[test]`), and `[test]` would either be glob-expanded
+            # (in shell contexts) or treated as a literal package name (with
+            # docker exec, where there's no shell). Wrapping in `sh -c`
+            # preserves the original command as a single string.
+            if isinstance(cmd, list):
+                return container.run(["sh", "-c", " ".join(cmd)], timeout=timeout)
+            return container.run(["sh", "-c", cmd], timeout=timeout)
         return _run_subprocess(cmd, cwd, timeout=timeout)
 
     # 5: Setup
     if task.get("setup_cmd"):
-        setup_rc, _, setup_err, _ = run_step(task["setup_cmd"], workdir, timeout=timeout_sec)
+        setup_rc, setup_out, setup_err, _ = run_step(task["setup_cmd"], workdir, timeout=timeout_sec)
         if setup_rc != 0:
+            # Include stdout in the error message too — the actual failure
+            # is often in stdout (e.g. pip install writes to stdout). Cap the
+            # combined output at 5000 chars; for a deeper look, re-run the
+            # setup_cmd manually in the workdir (the workdir is preserved
+            # when --keep-workdir is passed).
+            err_blob = (setup_err or "") + (setup_out or "")
             return _result(task, agent_name, mode, Status.TASK_ERROR, agent_version, {}, {}, "", str(workdir),
-                           f"setup_cmd failed: {setup_err[:200]}", agent_model=agent_model)
+                           f"setup_cmd failed (rc={setup_rc}): {err_blob[:5000]}", agent_model=agent_model)
 
     # 6: Pre-flight
     pre = _run_tests(task["test_cmd"], workdir, timeout=timeout_sec, run_subprocess=run_step)
@@ -334,11 +345,17 @@ def run(
 
 def _result(task, agent_name, mode, status, agent_version, pre_flight, post_flight, patch,
             workdir, error, agent_model=None, agent_duration=0.0, agent_usage=None,
+            prompt: str | None = None,
             repeat: int = 1, repeat_index: int | None = None):
     """Build a result dict in the spec's Output JSON shape."""
     suffix = f"__{repeat_index}" if repeat_index is not None else ""
+    # Include the model in the run_id so different `--model` values for
+    # the same (agent, task) get distinct files and don't skip on
+    # resume. Sanitize for filesystem safety.
+    safe_model = (agent_model or "default").replace("/", "-").replace(":", "-")
+    run_id = f"{_run_id_for_now()}__{agent_name}__{safe_model}__{task['instance_id']}{suffix}"
     return {
-        "run_id": f"{_run_id_for_now()}__{agent_name}__{task['instance_id']}{suffix}",
+        "run_id": run_id,
         "task_id": task["instance_id"],
         "agent": agent_name,
         "agent_version": agent_version,
@@ -349,6 +366,7 @@ def _result(task, agent_name, mode, status, agent_version, pre_flight, post_flig
         "duration_sec": agent_duration,
         "harness_git_sha": _git_sha_cached(),
         "task_source": task.get("source"),
+        "prompt": prompt if prompt is not None else task.get("prompt"),
         "usage": {
             "tokens_in": agent_usage.tokens_in if agent_usage else None,
             "tokens_out": agent_usage.tokens_out if agent_usage else None,

@@ -1,8 +1,15 @@
-FROM python:3.11-slim
+FROM python:3.9-slim
+
+# Python 3.9 is the latest with prebuilt numpy 1.19.5 wheels (Linux
+# x86_64 and aarch64). numpy<1.20 is required by the old astropy
+# Cython-generated C in SWE-bench Verified tasks (PyArray_Descr.subarray
+# was removed in numpy 1.20, and np.product in 2.0). The harness
+# itself still runs in the host venv (3.10); only the container
+# image needs to be 3.9.
 
 RUN apt-get update -qq && \
     apt-get install -y --no-install-recommends \
-        ca-certificates nodejs npm && \
+        build-essential ca-certificates git nodejs npm && \
     rm -rf /var/lib/apt/lists/*
 
 RUN npm install -g @anthropic-ai/claude-code@2.1.168 @openai/codex@0.137.0 2>&1 | tail -3
@@ -11,7 +18,23 @@ RUN npm install -g @anthropic-ai/claude-code@2.1.168 @openai/codex@0.137.0 2>&1 
 # Both agent CLIs and the harness need to be able to write under /work.
 RUN useradd --create-home --shell /bin/bash --uid 1000 cae
 
+# Pinned toolchain for building the old astropy C extensions that come
+# with SWE-bench Verified tasks. Without these, the task setup_cmd
+# fails on modern setuptools (extension_helpers imports
+# setuptools.dep_util, which was removed in setuptools 60) AND on
+# modern numpy (the Cython-generated `astropy/table/_np_utils.c`
+# references `PyArray_Descr.subarray`, removed in numpy 1.20).
+# Matches the `astropy-build` extra in pyproject.toml.
+USER root
+RUN pip install --break-system-packages \
+        "setuptools<60" \
+        "setuptools_scm<8" \
+        "extension-helpers<1" \
+        "cython<3" \
+        "pyerfa" \
+        "numpy<1.20"
 USER cae
+
 WORKDIR /home/cae
 ENV HOME=/home/cae
 

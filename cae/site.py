@@ -132,6 +132,14 @@ document.querySelectorAll('th').forEach((th, i) => {{
 
 
 def _task_html(task_id: str, results: list[dict]) -> str:
+    # Pull the prompt from the first result that has one (it's the same
+    # across all results for a task).
+    prompt = ""
+    for r in results:
+        if r.get("prompt"):
+            prompt = r["prompt"]
+            break
+
     sections = []
     for r in results:
         # Defensive: `usage` may be missing or null in some result JSONs.
@@ -150,11 +158,25 @@ def _task_html(task_id: str, results: list[dict]) -> str:
 
         # For non-resolved statuses, surface the error message — it's the
         # primary signal for diagnosing task_error / agent_error / timeout.
+        # Show the first 500 chars inline; the full message is one click
+        # away in a <details> block.
         error_block = ""
         if r.get("status") != "resolved" and r.get("error"):
-            error_block = (
-                f'<p><strong>Error:</strong> <code>{html.escape(r["error"][:1500])}</code></p>'
-            )
+            full_error = r["error"]
+            preview = full_error[:500]
+            extra = full_error[500:]
+            if extra:
+                error_block = (
+                    f'<p><strong>Error:</strong> <code>{html.escape(preview)}'
+                    f'<a href="#" onclick="this.parentNode.querySelector(\'details\').open=true;return false">…</a>'
+                    f'</code></p>'
+                    f'<details><summary>Full error</summary>'
+                    f'<pre><code>{html.escape(full_error)}</code></pre></details>'
+                )
+            else:
+                error_block = (
+                    f'<p><strong>Error:</strong> <code>{html.escape(full_error)}</code></p>'
+                )
 
         # Test result tables (pre-flight + post-flight) make it easy to see
         # which tests were expected vs. observed without re-loading the JSON.
@@ -198,6 +220,11 @@ def _task_html(task_id: str, results: list[dict]) -> str:
 {test_block}
 {patch_block}
 </details>""")
+    prompt_block = (
+        f'<h2>Prompt</h2><pre>{html.escape(prompt)}</pre>'
+        if prompt else ""
+    )
+
     return f"""<!doctype html>
 <html><head><meta charset="utf-8"><title>{html.escape(task_id)}</title>
 <style>body{{font:14px/1.4 system-ui,sans-serif;max-width:900px;margin:2em auto;padding:0 1em}}
@@ -216,6 +243,7 @@ code{{background:#f0f0f0;padding:1px 4px;border-radius:3px;font-size:90%}}
 </style></head><body>
 <h1>{html.escape(task_id)}</h1>
 <p><a href="../index.html">back to leaderboard</a></p>
+{prompt_block}
 {''.join(sections)}
 </body></html>"""
 

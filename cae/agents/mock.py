@@ -2,9 +2,26 @@
 
 This adapter is for tests and smoke runs only. It is registered as a first-class
 adapter so the harness exercises every code path, but cae build-site filters
-its results out of the public leaderboard. The default mock does NOT modify
-the workdir — tests that need a known patch should pre-apply the patch to the
-workdir before calling harness.run.
+its results out of the public leaderboard.
+
+Behavior
+--------
+The default `MockAdapter` does NOT modify the workdir — it spawns `python3 -c
+"import sys; sys.exit(0)"`, which exits 0 without touching anything. The
+harness then runs `git diff` (no changes → empty patch) and grades the
+result against the task's test_cmd. For most SWE-bench tasks, this means
+the tests will fail (the bug is still there) and the result is `failed`.
+For `tests/fixtures/tiny_task`, the harness's pre-flight check also fails
+because the test names don't match what pytest emits — so the result is
+`task_error`, not `failed`. Either way, the mock is a no-op smoke test
+that exercises the harness's plumbing without paying for an LLM call.
+
+The `_FixingMock` test fixture in `tests/test_harness.py` is a different
+mock that DOES modify the workdir (it applies the gold fix to `main.py`).
+It exists to give the integration test a deterministic "this task should
+resolve" scenario without needing a real agent or API key. To use it,
+the test re-registers it under the `mock` key in the ADAPTERS dict
+for the duration of the test.
 """
 
 from __future__ import annotations

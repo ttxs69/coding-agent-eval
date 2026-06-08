@@ -22,8 +22,15 @@ def cmd_run(args: argparse.Namespace) -> int:
     # the actual id used in the filename (not the directory name on disk).
     instance_id = json.loads((task_path / "task.json").read_text())["instance_id"]
 
-    # Resume: per (task, agent, repeat-index), skip if a result file already exists.
-    # With --repeat N, all N indices must be missing for the pair to fully run.
+    # Sanitize the requested model the same way the harness does (so the
+    # resume glob below matches exactly).
+    requested_model = (args.model or "default").replace("/", "-").replace(":", "-")
+
+    # Resume: per (task, agent, model, repeat-index), skip if a result file
+    # already exists. Including the model in the glob means running the
+    # same (agent, task) with a different --model produces a fresh file
+    # without needing --force. With --repeat N, all N indices must be
+    # missing for the pair to fully run.
     workdir = None
     if args.workdir:
         workdir = Path(args.workdir)
@@ -39,7 +46,7 @@ def cmd_run(args: argparse.Namespace) -> int:
             break
         repeat_index = i if repeat > 1 else None
         suffix = f"__{i}" if repeat_index is not None else ""
-        out_pattern = f"*__{args.agent}__{instance_id}{suffix}.json"
+        out_pattern = f"*__{args.agent}__{requested_model}__{instance_id}{suffix}.json"
         existing = list(results_dir.glob(out_pattern))
         if existing and not args.force:
             print(f"skipping {out_pattern}: {len(existing)} existing result(s). Use --force to overwrite.")
@@ -152,12 +159,20 @@ def cmd_list_tasks(args: argparse.Namespace) -> int:
 
     rows = []
     for t in tasks:
+        # A task can fail to parse for two reasons: missing task.json
+        # (it'll be caught here too) or a corrupt task.json. Surface
+        # both as [UNREADABLE] rows so the user knows which dirs are
+        # broken without having to find them by hand.
+        if not (t / "task.json").is_file():
+            rows.append((t.name, "[UNREADABLE: no task.json]", "(no results)", True))
+            continue
         try:
             data = json.loads((t / "task.json").read_text())
             instance_id = data.get("instance_id", t.name)
             repo = data.get("repo", "?")
-        except Exception:
-            instance_id, repo = t.name, "?"
+        except Exception as e:
+            rows.append((t.name, f"[UNREADABLE: {e}]", "(no results)", True))
+            continue
         # Detect malformed test IDs (SWE-bench data quality issue).
         f2p = data.get("fail_to_pass", []) or []
         p2p = data.get("pass_to_pass", []) or []

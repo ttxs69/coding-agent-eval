@@ -29,7 +29,7 @@ tasks/my_task/
 {
   "instance_id": "my_task",
   "repo": "my/repo",
-  "base_commit": "<any sha>",
+  "base_commit": "0000000000000000000000000000000000000000",
   "prompt": "Description of the task the agent sees.",
   "setup_cmd": "pip install -e .",
   "test_cmd": "python -m pytest -v",
@@ -37,6 +37,11 @@ tasks/my_task/
   "pass_to_pass": ["test_main.py::test_bar"]
 }
 ```
+
+`base_commit` is required by the schema but for hand-authored tasks
+(any 40-char hex string is fine — the harness doesn't actually `git
+checkout` since `repo/` is shipped in-tree). SWE-bench imports use
+the real upstream commit here.
 
 `fail_to_pass` lists tests that fail before the agent runs and must pass after.
 `pass_to_pass` lists tests that pass before and must still pass after.

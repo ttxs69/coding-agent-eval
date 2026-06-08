@@ -35,10 +35,13 @@ cd "$(dirname "$0")/.."
 # Make sure deps are installed (idempotent; no-op if already synced).
 uv sync --extra dev --extra astropy-build >/dev/null 2>&1
 
-# CFLAGS for old astropy's Cython-generated C: -Wincompatible-function-pointer-types
-# was promoted to an error by newer Clang, but the old wcslib wrappers trigger it
-# (the C API for tp_traverse/tp_clear changed in Python 3.9+).
-CFLAGS="-Wno-incompatible-function-pointer-types -Wno-error=incompatible-function-pointer-types -Wno-implicit-function-declaration"
+# CFLAGS for old astropy's Cython-generated C. The wcslib wrappers
+# trigger pointer-type mismatches (and clang also fires function-pointer-
+# type warnings). We use only flags that are accepted by both clang
+# (macOS dev) and gcc (Linux/docker) so the same CFLAGS works in
+# both local and docker mode. `-Wno-error=...` makes a specific
+# warning non-fatal; `-Wno-...` suppresses it entirely.
+CFLAGS="-Wno-incompatible-function-pointer-types -Wno-error=incompatible-function-pointer-types -Wno-incompatible-pointer-types -Wno-error=incompatible-pointer-types -Wno-implicit-function-declaration"
 export CFLAGS
 
 LOG=results/eval.log
