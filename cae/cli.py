@@ -195,7 +195,8 @@ def build_parser() -> argparse.ArgumentParser:
     p_add = sub.add_parser("add-task", help="add a new task under tasks/")
     p_add.add_argument("--from-swebench", action="store_true",
                       help="import from SWE-bench (default split: verified)")
-    p_add.add_argument("--split", default="test", help="SWE-bench split (default: test)")
+    p_add.add_argument("--split", default="test",
+                      help="SWE-bench split (default: test). Note: for the SWE-bench_Verified dataset, the only split is 'test' — the 'verified' in the dataset name is not a split.")
     p_add.add_argument("--limit", type=int, default=None, help="import at most N instances")
     p_add.add_argument("--instance-id", action="append", default=[],
                       help="specific instance_id to import (repeatable)")

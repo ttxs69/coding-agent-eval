@@ -26,6 +26,12 @@ From SWE-bench Verified:
 cae add-task --from-swebench --limit 50
 ```
 
+The split defaults to `test`, which is the only split in the `princeton-nlp/SWE-bench_Verified` dataset. (The "verified" in the dataset name is not a split name.) To pull a specific subset:
+
+```
+cae add-task --from-swebench --instance-id django__django-12345
+```
+
 Or by hand: see `docs/adding-tasks.md`.
 
 ## Build the leaderboard site

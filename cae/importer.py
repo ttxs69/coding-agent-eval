@@ -9,6 +9,7 @@ SWEbenchRecord type so the rest of the importer is decoupled from the source.
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
@@ -36,16 +37,50 @@ Fetcher = Callable[[str, str, Path], None]
 # Per-repo setup/test commands for common SWE-bench Verified repos. The importer
 # consults this table first; if a repo isn't listed, it falls back to the
 # generic Python defaults below.
+#
+# astropy installs `[test]` extras to pull in `hypothesis` and `pytest-astropy`,
+# which the test suite needs. Other listed repos have minimal test deps.
 SWE_BENCH_REPO_DEFAULTS: dict[str, dict[str, str]] = {
     "django/django":       {"setup_cmd": "pip install -e .",       "test_cmd": "python -m pytest -xvs"},
     "pytest-dev/pytest":   {"setup_cmd": "pip install -e .",       "test_cmd": "python -m pytest -xvs"},
     "pallets/flask":       {"setup_cmd": "pip install -e .",       "test_cmd": "python -m pytest -xvs"},
     "psf/requests":        {"setup_cmd": "pip install -e .",       "test_cmd": "python -m pytest -xvs"},
     "scikit-learn/scikit-learn": {"setup_cmd": "pip install -e .",  "test_cmd": "python -m pytest -xvs"},
-    "astropy/astropy":     {"setup_cmd": "pip install -e .",       "test_cmd": "python -m pytest -xvs"},
+    "astropy/astropy":     {"setup_cmd": "pip install -e .[test]", "test_cmd": "python -m pytest -xvs"},
 }
 
 GENERIC_PYTHON_DEFAULTS = {"setup_cmd": "pip install -e .", "test_cmd": "python -m pytest -xvs"}
+
+
+def _narrow_test_cmd(test_cmd: str, test_ids: list[str]) -> str:
+    """Replace a generic `python -m pytest` invocation with one scoped to the
+    test files referenced by `test_ids` (the FAIL_TO_PASS / PASS_TO_PASS list).
+
+    A generic `python -m pytest -xvs` runs the whole repo's test suite, which
+    often has collection errors in unrelated test files (e.g. unrelated
+    optional deps). Narrowing avoids those.
+
+    Non-pytest test_cmds (e.g. `cargo test`) are returned unchanged. Test IDs
+    that don't look like pytest node IDs are ignored, and the original
+    test_cmd is returned unchanged when no file paths can be extracted.
+    """
+    if "pytest" not in test_cmd:
+        return test_cmd
+    files: list[str] = []
+    for tid in test_ids:
+        m = re.match(r"^([^:\s]+)::", tid)
+        if m:
+            files.append(m.group(1))
+    if not files:
+        return test_cmd
+    # Deduplicate while preserving order.
+    seen: set[str] = set()
+    files = [f for f in files if not (f in seen or seen.add(f))]
+    # Replace the trailing test paths in `python -m pytest [-flags] [paths]`.
+    # We keep everything up to and including `pytest` (and any flags) and
+    # append the explicit file list.
+    head, _, _ = test_cmd.partition("pytest")
+    return f"{head}pytest -vs {' '.join(files)}"
 
 
 def default_fetcher(repo: str, base_commit: str, dest: Path) -> None:
@@ -78,13 +113,20 @@ def import_swebench_instance(
     # (or the generic Python defaults if the repo isn't in the table).
     defaults = SWE_BENCH_REPO_DEFAULTS.get(record.repo, GENERIC_PYTHON_DEFAULTS)
 
+    # Drop `-x` (stop on first failure): it prevents subsequent FAIL_TO_PASS
+    # tests from running, which breaks grading. Then narrow the test_cmd to
+    # the test files referenced by fail_to_pass/pass_to_pass so we don't
+    # collect (and fail) unrelated tests in the same repo.
+    test_cmd = defaults["test_cmd"].replace(" -x", " ")
+    test_cmd = _narrow_test_cmd(test_cmd, record.fail_to_pass + record.pass_to_pass)
+
     task_json = {
         "instance_id": record.instance_id,
         "repo": record.repo,
         "base_commit": record.base_commit,
         "prompt": record.prompt,
         "setup_cmd": defaults["setup_cmd"],
-        "test_cmd": defaults["test_cmd"],
+        "test_cmd": test_cmd,
         "fail_to_pass": record.fail_to_pass,
         "pass_to_pass": record.pass_to_pass,
         "source": {
@@ -138,14 +180,22 @@ def load_swebench_records(
     if limit is not None:
         ds = ds.select(range(min(limit, len(ds))))
     for row in ds:
+        # SWE-bench stores FAIL_TO_PASS / PASS_TO_PASS as JSON-encoded strings;
+        # deserialize so the harness can iterate over individual test IDs.
+        f2p = row["FAIL_TO_PASS"]
+        p2p = row["PASS_TO_PASS"]
+        if isinstance(f2p, str):
+            f2p = json.loads(f2p)
+        if isinstance(p2p, str):
+            p2p = json.loads(p2p)
         yield SWEbenchRecord(
             instance_id=row["instance_id"],
             repo=row["repo"],
             base_commit=row["base_commit"],
             prompt=row["problem_statement"],
             test_patch=row["test_patch"],
-            fail_to_pass=row["FAIL_TO_PASS"],
-            pass_to_pass=row["PASS_TO_PASS"],
+            fail_to_pass=f2p,
+            pass_to_pass=p2p,
         )
 
 
