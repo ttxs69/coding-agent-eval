@@ -18,16 +18,16 @@ footer { margin-top: 2em; color: #888; font-size: 12px; }
 <p>Public, reproducible benchmark of CLI coding agents on SWE-bench Verified.</p>
 <table id="lb">
 <thead><tr>
-  <th>Agent</th><th>Model</th><th>Pass rate</th><th># tasks</th>
+  <th>Agent</th><th>Model</th><th>Pass rate</th><th># tasks</th><th>Skipped</th>
   <th>Median cost</th><th>Median time</th><th>Median tokens (in+out)</th>
   <th>Last run</th>
 </tr></thead>
 <tbody>
-<tr><td>claude-code</td><td>glm-5.1</td><td>75%</td><td>4</td><td>$0.59</td><td>186s</td><td>38287</td><td>2026-06-08T05:23:02Z</td></tr>
-<tr><td>codex</td><td>MiniMax-M3</td><td>25%</td><td>4</td><td>$?</td><td>325s</td><td>752198</td><td>2026-06-08T05:47:13Z</td></tr>
+<tr><td>claude-code</td><td>glm-5.1</td><td>75%</td><td>4</td><td>0</td><td>$0.59</td><td>186s</td><td>38287</td><td>2026-06-08T05:23:02Z</td></tr>
+<tr><td>codex</td><td>MiniMax-M3</td><td>25%</td><td>4</td><td>0</td><td>$?</td><td>325s</td><td>752198</td><td>2026-06-08T05:47:13Z</td></tr>
 </tbody>
 </table>
-<footer>Built 2026-06-08T06:10:01Z with harness <code>8fdca78</code> &middot; <a href="reproducibility.html">reproducibility</a></footer>
+<footer>Built 2026-06-08T06:21:26Z with harness <code>8fdca78</code> &middot; <a href="reproducibility.html">reproducibility</a></footer>
 <script>
 // minimal sort: click any th to sort the table by that column
 document.querySelectorAll('th').forEach((th, i) => {
