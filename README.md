@@ -8,17 +8,18 @@ Public, reproducible benchmark for CLI coding agents. Compare Claude Code, Codex
 
 ## What is `cae`?
 
-`cae` is the CLI for the benchmark. It has five subcommands:
+`cae` is the CLI for the benchmark. It has six subcommands:
 
 | Command | What it does |
 |---|---|
 | `cae list-agents` | Show registered agent adapters and whether each is installed. |
+| `cae list-tasks` | Show every task under `tasks/`, with status counts from `results/`. |
 | `cae run` | Run one (task, agent) pair through the harness end-to-end. |
 | `cae add-task` | Import a task from SWE-bench (or write one by hand). |
 | `cae report` | Aggregate `results/*.json` into a console table. |
 | `cae build-site` | Render the static leaderboard site from `results/`. |
 
-`cae run` is the workhorse. It takes `--agent <name>` (a registered adapter) and a task, then runs the full lifecycle: prep workdir, apply test patch, run setup, pre-flight, run the agent, capture the patch, grade, write the result. Adding a new agent is a single file under `cae/agents/` that implements the `AgentAdapter` protocol — see `cae/agents/claude_code.py` as a template.
+`cae run` is the workhorse. It takes `--agent <name>` (a registered adapter) and a task, then runs the full lifecycle: prep workdir, apply test patch, run setup, pre-flight, run the agent, capture the patch, grade, write the result. Adding a new agent is a single file under `cae/agents/` that implements the `AgentAdapter` protocol — see `docs/adding-agents.md` for the full reference, and `cae/agents/claude_code.py` as a template.
 
 The `scripts/run_eval.sh` wrapper just loops `cae run` over a list of tasks and agents so you don't have to type the loop by hand.
 
@@ -58,6 +59,11 @@ uv run cae run --agent mock --task tiny_task --tasks-dir tests/fixtures --result
 
 The result is written to `/tmp/cae/<run_id>.json`. The harness skips any (task, agent) pair that already has a result — re-run the same command to resume after an interruption. Use `--force` to overwrite.
 
+Useful flags on `cae run`:
+
+- `--model <name>` — pin a specific model (overrides the agent's config). Pass e.g. `claude-sonnet-4-6` or `gpt-5`.
+- `--max-cost-usd <float>` — abort the `--repeat` loop when cumulative cost reaches this value. Subscription-billed runs (cost_usd=None) count as $0. Pair with `--repeat` to cap a long-running eval.
+
 ## Run a full eval
 
 ```
@@ -86,6 +92,8 @@ Deploy `site/` to GitHub Pages (or run `uv run cae build-site --publish` to push
 uv run pytest -v
 uv run ruff check cae tests
 ```
+
+CI runs the same on every push/PR via `.github/workflows/test.yml`.
 
 ## How it works
 
