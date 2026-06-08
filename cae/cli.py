@@ -118,10 +118,17 @@ def cmd_list_agents(args: argparse.Namespace) -> int:
 
 
 def cmd_list_tasks(args: argparse.Namespace) -> int:
-    """List every task under tasks-dir, with status counts from results-dir."""
+    """List every task under tasks-dir, with status counts from results-dir.
+
+    `--filter broken` shows only tasks whose FAIL_TO_PASS or PASS_TO_PASS
+    contains malformed test IDs (unclosed brackets, etc.) — a sign
+    that pre-flight will fail because pytest won't emit those IDs.
+    Useful for skipping known-broken SWE-bench instances.
+    """
     from pathlib import Path
     import json
     from collections import Counter
+    from cae.importer import validate_test_ids
 
     tasks_dir = Path(args.tasks_dir)
     if not tasks_dir.is_dir():
@@ -143,7 +150,7 @@ def cmd_list_tasks(args: argparse.Namespace) -> int:
         print(f"(no tasks under {tasks_dir})")
         return 0
 
-    print(f"{'INSTANCE_ID':<40} {'REPO':<25} STATUSES")
+    rows = []
     for t in tasks:
         try:
             data = json.loads((t / "task.json").read_text())
@@ -151,12 +158,38 @@ def cmd_list_tasks(args: argparse.Namespace) -> int:
             repo = data.get("repo", "?")
         except Exception:
             instance_id, repo = t.name, "?"
+        # Detect malformed test IDs (SWE-bench data quality issue).
+        f2p = data.get("fail_to_pass", []) or []
+        p2p = data.get("pass_to_pass", []) or []
+        bad_f2p = len([t for t in f2p if t not in validate_test_ids(f2p)])
+        bad_p2p = len([t for t in p2p if t not in validate_test_ids(p2p)])
+        n_bad = bad_f2p + bad_p2p
+        is_broken = n_bad > 0
         s = statuses.get(instance_id)
         if s:
             summary = ", ".join(f"{k}:{v}" for k, v in sorted(s.items()))
         else:
             summary = "(no results)"
-        print(f"{instance_id:<40} {repo:<25} {summary}")
+        if is_broken:
+            summary = f"{summary} [+{n_bad} malformed ids]" if s else f"({n_bad} malformed ids)"
+        if args.filter == "broken" and not is_broken:
+            continue
+        if args.filter == "runnable" and is_broken:
+            continue
+        rows.append((instance_id, repo, summary, is_broken))
+
+    if not rows:
+        if args.filter == "broken":
+            print(f"(no broken tasks — all {len(tasks)} tasks are runnable)")
+        elif args.filter == "runnable":
+            print(f"(no runnable tasks — all {len(tasks)} are broken)")
+        return 0
+
+    flag = " [BROKEN]" if any(r[3] for r in rows) and args.filter != "broken" else ""
+    print(f"{'INSTANCE_ID':<40} {'REPO':<25} STATUSES{flag}")
+    for instance_id, repo, summary, is_broken in rows:
+        marker = " [BROKEN]" if is_broken and args.filter != "broken" else ""
+        print(f"{instance_id:<40} {repo:<25} {summary}{marker}")
     return 0
 
 
@@ -295,6 +328,9 @@ def build_parser() -> argparse.ArgumentParser:
     p_lt = sub.add_parser("list-tasks", help="list every task under tasks-dir, with status counts from results-dir")
     p_lt.add_argument("--tasks-dir", default="tasks", help="where to look for tasks (default: tasks)")
     p_lt.add_argument("--results-dir", default="results", help="where to look for result JSONs (default: results)")
+    p_lt.add_argument("--filter", choices=["all", "broken", "runnable"], default="all",
+                      help="`broken` = only tasks with malformed test IDs (likely ungradeable); "
+                           "`runnable` = the complement. Default: all.")
     p_lt.set_defaults(func=cmd_list_tasks)
 
     p_rep = sub.add_parser("report", help="aggregate and display results")

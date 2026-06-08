@@ -2,13 +2,18 @@
 # Run the eval: tasks in tasks/ x {agents}, in local mode.
 #
 # Usage:
-#   sh scripts/run_eval.sh                              # all tasks, all available agents
-#   sh scripts/run_eval.sh 1                            # 1 task, all available agents
-#   sh scripts/run_eval.sh 4                            # first 4 tasks, all available agents
+#   sh scripts/run_eval.sh                              # all runnable tasks, all available agents
+#   sh scripts/run_eval.sh 1                            # 1 runnable task, all available agents
+#   sh scripts/run_eval.sh 4                            # first 4 runnable tasks, all available agents
 #   sh scripts/run_eval.sh 1 claude-code                # 1 task, one specific agent
 #   sh scripts/run_eval.sh 4 claude-code,codex          # 4 tasks, comma-separated list
+#   sh scripts/run_eval.sh --all-broken                 # include tasks with malformed test IDs
 #   sh scripts/run_eval.sh --small                      # alias for 4
 #   sh scripts/run_eval.sh --help                       # show usage
+#
+# Tasks with malformed test IDs (a known SWE-bench data quality issue)
+# are skipped by default — pre-flight catches them as task_error anyway,
+# so excluding them saves API spend. Use `--all-broken` to opt in.
 #
 # Agent selection: by default, the script auto-detects all installed
 # non-mock agents via `cae list-agents`. Pass a comma-separated list
@@ -43,25 +48,26 @@ log() {
   printf '[%s] %s\n' "$(date '+%Y-%m-%dT%H:%M:%S')" "$*" | tee -a "$LOG"
 }
 
-# Discover tasks from the tasks/ dir (each subdir is one instance), sorted.
-TASKS_ALL=""
-for d in tasks/*/; do
-  [ -d "$d" ] || continue
-  TASKS_ALL="$TASKS_ALL $(basename "$d")"
+# Pre-arg: --all-broken flag (parsed by shifting past it).
+INCLUDE_BROKEN=0
+while [ "${1:-}" = "--all-broken" ] || [ "${1:-}" = "--all" ]; do
+  case "$1" in
+    --all-broken|--all) INCLUDE_BROKEN=1 ;;
+  esac
+  shift
 done
-TOTAL_TASKS=$(echo $TASKS_ALL | wc -w | tr -d ' ')
 
-# First arg: task count (or --small / --help).
+# First non-flag arg: task count (or --small / --help).
 LIMIT=""
 case "${1:-}" in
   "")
-    LIMIT="$TOTAL_TASKS"
+    LIMIT=99999  # set later from total count
     ;;
   --small)
     LIMIT=4
     ;;
   -h|--help)
-    sed -n '2,22p' "$0"
+    sed -n '2,29p' "$0"
     exit 0
     ;;
   --*)
@@ -76,6 +82,30 @@ case "${1:-}" in
     LIMIT=$1
     ;;
 esac
+
+# Discover tasks. We use `cae list-tasks` to enumerate them and pick up
+# the broken/runnable status in one pass (saves a separate stat walk).
+LIST_OUT=$(uv run cae list-tasks 2>/dev/null)
+TASKS_RUNNABLE=$(echo "$LIST_OUT" | awk 'NR > 1 && $1 != "" && !/\[BROKEN\]/ {print $1}')
+TASKS_BROKEN=$(echo "$LIST_OUT" | awk 'NR > 1 && $1 != "" && /\[BROKEN\]/ {print $1}')
+N_RUNNABLE=$(echo $TASKS_RUNNABLE | wc -w | tr -d ' ')
+N_BROKEN=$(echo $TASKS_BROKEN | wc -w | tr -d ' ')
+
+if [ "$INCLUDE_BROKEN" = 1 ]; then
+  TASKS_ALL="$TASKS_RUNNABLE $TASKS_BROKEN"
+  log "Including $N_BROKEN broken task(s) (use without --all-broken to skip)"
+else
+  TASKS_ALL="$TASKS_RUNNABLE"
+  if [ "$N_BROKEN" -gt 0 ]; then
+    log "Skipping $N_BROKEN broken task(s) with malformed test IDs (use --all-broken to include)"
+  fi
+fi
+TOTAL_TASKS=$(echo $TASKS_ALL | wc -w | tr -d ' ')
+
+# Default count = all available.
+if [ "$LIMIT" = 99999 ]; then
+  LIMIT="$TOTAL_TASKS"
+fi
 
 if [ "$LIMIT" -gt "$TOTAL_TASKS" ]; then
   log "Requested $LIMIT tasks but only $TOTAL_TASKS available; using $TOTAL_TASKS"
@@ -112,7 +142,7 @@ else
   done
 fi
 
-# Take the first $LIMIT tasks (alphabetical order, same as `ls`).
+# Take the first $LIMIT tasks.
 N=0
 TASKS=""
 for t in $TASKS_ALL; do

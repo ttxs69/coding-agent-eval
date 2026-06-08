@@ -67,16 +67,17 @@ Useful flags on `cae run`:
 ## Run a full eval
 
 ```
-sh scripts/run_eval.sh                              # all tasks, auto-detect agents
-sh scripts/run_eval.sh 1                            # 1 task, auto-detect
-sh scripts/run_eval.sh 4                            # first 4 tasks, auto-detect
+sh scripts/run_eval.sh                              # all runnable tasks, auto-detect agents
+sh scripts/run_eval.sh 1                            # 1 runnable task, auto-detect
+sh scripts/run_eval.sh 4                            # first 4 runnable tasks, auto-detect
 sh scripts/run_eval.sh 1 claude-code                # 1 task, specific agent
 sh scripts/run_eval.sh 4 claude-code,codex          # 4 tasks, comma-separated list
+sh scripts/run_eval.sh --all-broken                 # include tasks with malformed test IDs
 sh scripts/run_eval.sh --small                      # alias for 4
 sh scripts/run_eval.sh --help                       # show usage
 ```
 
-The script picks tasks alphabetically and auto-detects agents via `cae list-agents` (excluding the `mock` test adapter). Override with a comma-separated agent list. Each (task, agent) pair is one `cae run` invocation; results land in `results/eval.log` and per-run JSONs land in `results/`.
+The script picks runnable tasks alphabetically and auto-detects agents via `cae list-agents` (excluding the `mock` test adapter). Override with a comma-separated agent list. Each (task, agent) pair is one `cae run` invocation; results land in `results/eval.log` and per-run JSONs land in `results/`. Tasks with malformed test IDs (a known SWE-bench data quality issue) are skipped by default — pass `--all-broken` to opt in.
 
 ## Build the leaderboard site
 
@@ -97,9 +98,24 @@ CI runs the same on every push/PR via `.github/workflows/test.yml`.
 
 ## Known limitations
 
-- **Old astropy tasks don't build in local mode on arm64 macOS.** The 16 astropy instances in the repo with truncated test IDs *and* the C extension code (e.g. `astropy__astropy-12907`) need `numpy<1.20` and `setuptools<60`, but `numpy<1.20` has no prebuilt wheel for Python 3.10 on arm64 macOS. The result: those tasks' `setup_cmd` fails with C compile errors. They work in **docker mode** (Linux x86-64 has the right numpy wheel). The 4 tasks whose setup succeeds are the only ones that can be graded locally.
-- **`datasets` is an opt-in extra.** Pulling it transitively installs numpy 2.x, which would break the SWE-bench task setup. If you actually want `cae add-task --from-swebench`, install it explicitly: `uv sync --extra importer`.
-- **Test data quality in SWE-bench Verified.** 8/20 astropy instances have truncated test IDs in `FAIL_TO_PASS`/`PASS_TO_PASS` (e.g. `test_x[ceci` with no closing bracket). The importer filters the obvious malformations; tasks with *all* bad IDs raise `MalformedTestIdsError` and are skipped. Tasks with *some* bad IDs still get imported — pre-flight catches the rest as `task_error`.
+### Platform support for local mode
+
+| Platform | Python 3.10 | Notes |
+|---|---|---|
+| **Linux x86_64** | ✅ full | Use docker mode for the cleanest setup. |
+| **Linux arm64** (AWS Graviton, RPi) | ✅ full | numpy 1.19.5 has manylinux2014_aarch64 wheels. |
+| **macOS x86_64** (Intel) | ✅ full | numpy 1.19.5 has macosx_10_9_x86_64 wheels. |
+| **macOS arm64** (Apple Silicon) | ⚠️ partial | numpy<1.20 has **no arm64 macOS wheel**, so old astropy's C extensions don't build. Only the ~12 tasks whose C code doesn't reference removed numpy APIs run locally; the other 8 are auto-skipped. |
+
+For a real eval across all 20 astropy instances on Apple Silicon, use **`cae run --docker`** (or `sh scripts/run_eval.sh --docker`). Docker runs Linux x86-64 and has the right wheels.
+
+### Test data quality in SWE-bench Verified
+
+8/20 astropy instances have truncated test IDs in `FAIL_TO_PASS`/`PASS_TO_PASS` (e.g. `test_x[ceci` with no closing bracket). The harness catches these at pre-flight as `task_error` with a clear diagnostic. `cae list-tasks --filter broken` lists them. The eval script skips broken tasks by default — pass `--all-broken` to opt in.
+
+### `datasets` is an opt-in extra
+
+Pulling it transitively installs numpy 2.x, which would break the SWE-bench task setup. If you actually want `cae add-task --from-swebench`, install it explicitly: `uv sync --extra importer`.
 
 ## How it works
 
