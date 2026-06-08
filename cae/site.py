@@ -137,22 +137,86 @@ def _task_html(task_id: str, results: list[dict]) -> str:
         # Defensive: `usage` may be missing or null in some result JSONs.
         usage = r.get("usage") or {}
         cost = usage.get("cost_usd")
-        sections.append(f"""<details>
+        cache_read = usage.get("cache_read_tokens")
+        cache_creation = usage.get("cache_creation_tokens")
+        cache_info = ""
+        if cache_read or cache_creation:
+            parts = []
+            if cache_creation:
+                parts.append(f"{cache_creation:,} cache write")
+            if cache_read:
+                parts.append(f"{cache_read:,} cache read")
+            cache_info = f" &middot; {', '.join(parts)}"
+
+        # For non-resolved statuses, surface the error message — it's the
+        # primary signal for diagnosing task_error / agent_error / timeout.
+        error_block = ""
+        if r.get("status") != "resolved" and r.get("error"):
+            error_block = (
+                f'<p><strong>Error:</strong> <code>{html.escape(r["error"][:1500])}</code></p>'
+            )
+
+        # Test result tables (pre-flight + post-flight) make it easy to see
+        # which tests were expected vs. observed without re-loading the JSON.
+        test_block = ""
+        tr = r.get("test_results") or {}
+        if tr:
+            rows = []
+            for kind in ("fail_to_pass", "pass_to_pass"):
+                for name, status in (tr.get("pre_flight", {}).get(kind) or {}).items():
+                    post = (tr.get("post_flight", {}).get(kind) or {}).get(name, "?")
+                    rows.append(
+                        f"<tr><td>{html.escape(kind)}</td>"
+                        f"<td><code>{html.escape(name)}</code></td>"
+                        f"<td>{html.escape(status)}</td>"
+                        f"<td>{html.escape(post)}</td></tr>"
+                    )
+            if rows:
+                test_block = (
+                    "<h4>Test results</h4>"
+                    "<table><thead><tr><th>Bucket</th><th>Test</th>"
+                    "<th>Pre-flight</th><th>Post-flight</th></tr></thead>"
+                    f"<tbody>{''.join(rows)}</tbody></table>"
+                )
+
+        # Patch is the agent's actual diff. Wrap in a language-diff class
+        # so a future highlight.js integration can pick it up automatically.
+        patch = r.get("patch", "") or ""
+        patch_block = (
+            f'<h4>Patch</h4><pre><code class="language-diff">'
+            f'{html.escape(patch)}</code></pre>'
+            if patch else ""
+        )
+
+        sections.append(f"""<details open>
 <summary><strong>{html.escape(r['agent'])}</strong> — {html.escape(r['status'])}</summary>
 <p>Model: <code>{html.escape(str(r.get('model') or ''))}</code> &middot;
+   Version: <code>{html.escape(str(r.get('agent_version') or ''))}</code> &middot;
    Duration: {r.get('duration_sec', 0):.0f}s &middot;
-   Cost: {_fmt_cost(cost)}</p>
-<pre><code>{html.escape(r.get('patch', ''))}</code></pre>
+   Cost: {_fmt_cost(cost)}{cache_info}</p>
+{error_block}
+{test_block}
+{patch_block}
 </details>""")
     return f"""<!doctype html>
 <html><head><meta charset="utf-8"><title>{html.escape(task_id)}</title>
 <style>body{{font:14px/1.4 system-ui,sans-serif;max-width:900px;margin:2em auto;padding:0 1em}}
 pre{{background:#f5f5f5;padding:1em;overflow-x:auto}}
-@media(prefers-color-scheme:dark){{body{{background:#1a1a1a;color:#ddd}}pre{{background:#222}}}}
+table{{border-collapse:collapse;margin:1em 0;width:100%;font-size:13px}}
+th,td{{padding:4px 8px;text-align:left;border-bottom:1px solid #ddd}}
+th{{background:#f5f5f5}}
+code{{background:#f0f0f0;padding:1px 4px;border-radius:3px;font-size:90%}}
+@media(prefers-color-scheme:dark){{
+  body{{background:#1a1a1a;color:#ddd}}
+  pre{{background:#222}}
+  th{{background:#2a2a2a}}
+  th,td{{border-color:#333}}
+  code{{background:#2a2a2a;color:#ddd}}
+}}
 </style></head><body>
 <h1>{html.escape(task_id)}</h1>
-{''.join(sections)}
 <p><a href="../index.html">back to leaderboard</a></p>
+{''.join(sections)}
 </body></html>"""
 
 
