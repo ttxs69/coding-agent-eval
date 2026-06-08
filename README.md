@@ -1,6 +1,6 @@
 # probe-agent-eval
 
-Public, reproducible benchmark for CLI coding agents. Compare Claude Code, Codex, Aider, and more on the same set of real-world tasks. See `docs/superpowers/specs/2026-06-06-coding-agent-eval-design.md` for the design.
+Public, reproducible benchmark for CLI coding agents. Compare Claude Code, Codex, Aider, and more on the same set of real-world tasks.
 
 ## Quickstart
 
@@ -9,14 +9,7 @@ pip install -e ".[dev]"
 cae --help
 ```
 
-## Run a task
-
-```
-cae list-agents
-cae run --agent mock --task tiny_task --tasks-dir tests/fixtures --results-dir /tmp/cae
-```
-
-The result is written to `/tmp/cae/<run_id>.json`.
+**Note:** SWE-bench tasks from older repos (e.g. astropy) may need Python 3.10 and CFLAGS set — see "Environment" below.
 
 ## Add tasks
 
@@ -26,13 +19,34 @@ From SWE-bench Verified:
 cae add-task --from-swebench --limit 50
 ```
 
-The split defaults to `test`, which is the only split in the `princeton-nlp/SWE-bench_Verified` dataset. (The "verified" in the dataset name is not a split name.) To pull a specific subset:
+The split defaults to `test` (the only split in the dataset). To pull specific instances:
 
 ```
 cae add-task --from-swebench --instance-id django__django-12345
 ```
 
-Or by hand: see `docs/adding-tasks.md`.
+Tasks with malformed test IDs (a known SWE-bench data quality issue) are skipped automatically with a warning.
+
+## Run a task
+
+```
+cae list-agents
+cae run --agent mock --task tiny_task --tasks-dir tests/fixtures --results-dir /tmp/cae
+```
+
+The result is written to `/tmp/cae/<run_id>.json`. The harness skips any (task, agent) pair that already has a result — re-run the same command to resume after an interruption. Use `--force` to overwrite.
+
+## Run a full eval
+
+```
+# Small (4 tasks that pass pre-flight)
+sh scripts/run_small_eval.sh
+
+# Full (all tasks in tasks/)
+sh scripts/run_eval.sh
+```
+
+Each script runs every task × {claude-code, codex}, logs to `results/eval.log`, and prints an aggregated report at the end.
 
 ## Build the leaderboard site
 
@@ -41,6 +55,17 @@ cae build-site --results-dir results --out-dir site
 ```
 
 Deploy `site/` to GitHub Pages (or run `cae build-site --publish` to push via the `gh` CLI).
+
+## Environment
+
+Some SWE-bench tasks (notably older astropy) have C extension code incompatible with Python 3.11+ and newer Clang. If setup_cmd fails with C compiler errors:
+
+```
+uv python install 3.10
+uv venv .venv --python 3.10
+.venv/bin/pip install --ignore-requires-python -e ".[dev]"
+export CFLAGS="-Wno-incompatible-function-pointer-types -Wno-error=incompatible-function-pointer-types -Wno-implicit-function-declaration"
+```
 
 ## Development
 
@@ -51,4 +76,4 @@ ruff check cae tests
 
 ## Status
 
-Pre-v1. See `docs/superpowers/plans/2026-06-07-coding-agent-eval.md` for the implementation plan.
+Pre-v1.
