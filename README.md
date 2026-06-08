@@ -4,6 +4,8 @@ Public, reproducible benchmark for CLI coding agents. Compare Claude Code, Codex
 
 **Live leaderboard:** [ttxs69.github.io/coding-agent-eval](https://ttxs69.github.io/coding-agent-eval/)
 
+> **Cost warning:** running an eval calls paid LLM APIs. A full eval (20 tasks × 3 agents) can easily cost $50–$100+ in API fees, depending on model and task length. **Start small** with `sh scripts/run_eval.sh 1` (one task, all agents = 2–3 runs ≈ $1–$3) to confirm everything works before scaling up. Use a cheap model first if your agent supports `--model` (e.g. `cae run --model claude-haiku-4-5`); the leaderboard's pass rate is the same but tokens cost a fraction.
+
 ## What is `cae`?
 
 `cae` is the CLI for the benchmark. It has five subcommands:
