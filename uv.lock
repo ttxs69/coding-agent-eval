@@ -152,9 +152,6 @@ wheels = [
 name = "coding-agent-eval"
 version = "0.1.0"
 source = { editable = "." }
-dependencies = [
-    { name = "datasets" },
-]
 
 [package.optional-dependencies]
 astropy-build = [
@@ -170,11 +167,14 @@ dev = [
     { name = "pytest" },
     { name = "ruff" },
 ]
+importer = [
+    { name = "datasets" },
+]
 
 [package.metadata]
 requires-dist = [
     { name = "cython", marker = "extra == 'astropy-build'", specifier = "<3" },
-    { name = "datasets", specifier = ">=2.14" },
+    { name = "datasets", marker = "extra == 'importer'", specifier = ">=2.14" },
     { name = "extension-helpers", marker = "extra == 'astropy-build'", specifier = "<1" },
     { name = "pip", marker = "extra == 'dev'", specifier = "<24" },
     { name = "pyerfa", marker = "extra == 'astropy-build'" },
@@ -184,7 +184,7 @@ requires-dist = [
     { name = "setuptools-scm", marker = "extra == 'astropy-build'", specifier = "<8" },
     { name = "wheel", marker = "extra == 'astropy-build'" },
 ]
-provides-extras = ["dev", "astropy-build"]
+provides-extras = ["dev", "importer", "astropy-build"]
 
 [[package]]
 name = "colorama"

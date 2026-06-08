@@ -11,9 +11,12 @@ description = "Public benchmark for CLI coding agents (Claude Code, Codex, Aider
 # the wcslib wrappers). The StrEnum backport in cae/agents/base.py makes
 # 3.9 also viable; 3.10 is the widest safe range.
 requires-python = ">=3.10,<3.11"
-dependencies = [
-    "datasets>=2.14",
-]
+# `datasets` is intentionally NOT a runtime dep — only `cae add-task
+# --from-swebench` needs it. Adding it here would force numpy 2.x into
+# the venv, which breaks the SWE-bench task setup_cmd (old astropy uses
+# np.product, removed in numpy 2.0). Install it via the `importer` extra
+# when you actually need to import tasks.
+dependencies = []
 
 [project.optional-dependencies]
 dev = [
@@ -27,6 +30,11 @@ dev = [
     # which doesn't exist in our pinned setuptools<60. pip 23.x doesn't
     # require the hook, so it accepts the old build backend.
     "pip<24",
+]
+# `importer` is for users who run `cae add-task --from-swebench`.
+# Pulls in datasets, which transitively requires modern numpy + pyarrow.
+importer = [
+    "datasets>=2.14",
 ]
 # Pinned toolchain for building the old astropy C extensions that come
 # with SWE-bench Verified tasks. Without these, `pip install -e .[test]`
@@ -42,6 +50,14 @@ astropy-build = [
     # delegates to when building sdist metadata. Without it, `pip install
     # -e .[test]` errors with "invalid command 'bdist_wheel'".
     "wheel",
+    # NOTE: numpy is intentionally NOT pinned here. The old astropy
+    # C extensions (e.g. astropy__astropy-12907) need numpy<1.20, but
+    # numpy<1.20 has no prebuilt wheel for Python 3.10 on macOS arm64
+    # and won't build on modern toolchains. Result: those tasks' setup_cmd
+    # fails in local mode on arm64 macs. They work in docker mode
+    # (Linux + x86-64 wheel) and probably also work on Linux arm64
+    # (numpy 1.19.5 has a manylinux wheel). Add `numpy<1.20` here if
+    # your platform has the right wheel.
 ]
 
 [project.scripts]

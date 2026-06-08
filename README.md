@@ -95,6 +95,12 @@ uv run ruff check cae tests
 
 CI runs the same on every push/PR via `.github/workflows/test.yml`.
 
+## Known limitations
+
+- **Old astropy tasks don't build in local mode on arm64 macOS.** The 16 astropy instances in the repo with truncated test IDs *and* the C extension code (e.g. `astropy__astropy-12907`) need `numpy<1.20` and `setuptools<60`, but `numpy<1.20` has no prebuilt wheel for Python 3.10 on arm64 macOS. The result: those tasks' `setup_cmd` fails with C compile errors. They work in **docker mode** (Linux x86-64 has the right numpy wheel). The 4 tasks whose setup succeeds are the only ones that can be graded locally.
+- **`datasets` is an opt-in extra.** Pulling it transitively installs numpy 2.x, which would break the SWE-bench task setup. If you actually want `cae add-task --from-swebench`, install it explicitly: `uv sync --extra importer`.
+- **Test data quality in SWE-bench Verified.** 8/20 astropy instances have truncated test IDs in `FAIL_TO_PASS`/`PASS_TO_PASS` (e.g. `test_x[ceci` with no closing bracket). The importer filters the obvious malformations; tasks with *all* bad IDs raise `MalformedTestIdsError` and are skipped. Tasks with *some* bad IDs still get imported — pre-flight catches the rest as `task_error`.
+
 ## How it works
 
 - Tasks live under `tasks/<instance_id>/{task.json, repo/, tests.patch}`.

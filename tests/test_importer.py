@@ -134,6 +134,7 @@ def test_import_test_cmd_drops_x_and_narrows_to_files(tmp_path):
 def test_load_swebench_records_deserializes_json_lists(monkeypatch):
     """SWE-bench stores FAIL_TO_PASS/PASS_TO_PASS as JSON-encoded strings;
     load_swebench_records must yield them as actual lists."""
+    datasets = pytest.importorskip("datasets")
     from cae.importer import load_swebench_records
 
     fake_row = {
@@ -154,7 +155,6 @@ def test_load_swebench_records_deserializes_json_lists(monkeypatch):
 
     # `load_dataset` is imported inside the function, so patch it where
     # it's looked up: the `datasets` module.
-    import datasets
     monkeypatch.setattr(
         datasets, "load_dataset", lambda *a, **kw: FakeDataset([fake_row]),
     )
