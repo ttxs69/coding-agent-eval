@@ -19,6 +19,14 @@ dependencies = [
 dev = [
     "pytest>=7.4",
     "ruff>=0.1",
+    # pip must be present on PATH inside the venv — the task setup_cmd
+    # for SWE-bench tasks runs `pip install -e .[test]`, and uv venvs
+    # don't ship pip by default. Installing it here makes `uv sync`
+    # place the pip binary in .venv/bin reproducibly.
+    # Pinned to <24: pip 24+ requires setuptools' `build_editable` hook,
+    # which doesn't exist in our pinned setuptools<60. pip 23.x doesn't
+    # require the hook, so it accepts the old build backend.
+    "pip<24",
 ]
 # Pinned toolchain for building the old astropy C extensions that come
 # with SWE-bench Verified tasks. Without these, `pip install -e .[test]`
@@ -30,6 +38,10 @@ astropy-build = [
     "extension-helpers<1",
     "cython<3",
     "pyerfa",
+    # `wheel` provides the `bdist_wheel` command that old setuptools
+    # delegates to when building sdist metadata. Without it, `pip install
+    # -e .[test]` errors with "invalid command 'bdist_wheel'".
+    "wheel",
 ]
 
 [project.scripts]

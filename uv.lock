@@ -163,8 +163,10 @@ astropy-build = [
     { name = "pyerfa" },
     { name = "setuptools" },
     { name = "setuptools-scm" },
+    { name = "wheel" },
 ]
 dev = [
+    { name = "pip" },
     { name = "pytest" },
     { name = "ruff" },
 ]
@@ -174,11 +176,13 @@ requires-dist = [
     { name = "cython", marker = "extra == 'astropy-build'", specifier = "<3" },
     { name = "datasets", specifier = ">=2.14" },
     { name = "extension-helpers", marker = "extra == 'astropy-build'", specifier = "<1" },
+    { name = "pip", marker = "extra == 'dev'", specifier = "<24" },
     { name = "pyerfa", marker = "extra == 'astropy-build'" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=7.4" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.1" },
     { name = "setuptools", marker = "extra == 'astropy-build'", specifier = "<60" },
     { name = "setuptools-scm", marker = "extra == 'astropy-build'", specifier = "<8" },
+    { name = "wheel", marker = "extra == 'astropy-build'" },
 ]
 provides-extras = ["dev", "astropy-build"]
 
@@ -519,6 +523,15 @@ wheels = [
 ]
 
 [[package]]
+name = "pip"
+version = "23.3.2"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/b7/06/6b1ad0ae8f97d7a0d6f6ad640db10780578999e647a9593512ceb6f06469/pip-23.3.2.tar.gz", hash = "sha256:7fd9972f96db22c8077a1ee2691b172c8089b17a5652a44494a9ecb0d78f9149", size = 2132244, upload-time = "2023-12-17T13:05:07.339Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/15/aa/3f4c7bcee2057a76562a5b33ecbd199be08cdb4443a02e26bd2c3cf6fc39/pip-23.3.2-py3-none-any.whl", hash = "sha256:5052d7889c1f9d05224cd41741acb7c5d6fa735ab34e339624a614eaaa7e7d76", size = 2109393, upload-time = "2023-12-17T13:05:02.424Z" },
+]
+
+[[package]]
 name = "pluggy"
 version = "1.6.0"
 source = { registry = "https://pypi.org/simple" }
@@ -807,6 +820,18 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/53/0c/06f8b233b8fd13b9e5ee11424ef85419ba0d8ba0b3138bf360be2ff56953/urllib3-2.7.0.tar.gz", hash = "sha256:231e0ec3b63ceb14667c67be60f2f2c40a518cb38b03af60abc813da26505f4c", size = 433602, upload-time = "2026-05-07T16:13:18.596Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/7f/3e/5db95bcf282c52709639744ca2a8b149baccf648e39c8cc87553df9eae0c/urllib3-2.7.0-py3-none-any.whl", hash = "sha256:9fb4c81ebbb1ce9531cce37674bbc6f1360472bc18ca9a553ede278ef7276897", size = 131087, upload-time = "2026-05-07T16:13:17.151Z" },
+]
+
+[[package]]
+name = "wheel"
+version = "0.47.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "packaging" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/39/62/75f18a0f03b4219c456652c7780e4d749b929eb605c098ce3a5b6b6bc081/wheel-0.47.0.tar.gz", hash = "sha256:cc72bd1009ba0cf63922e28f94d9d83b920aa2bb28f798a31d0691b02fa3c9b3", size = 63854, upload-time = "2026-04-22T15:51:27.727Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/87/1b/9e33c09813d65e248f7f773119148a612516a4bea93e9c6f545f78455b7c/wheel-0.47.0-py3-none-any.whl", hash = "sha256:212281cab4dff978f6cedd499cd893e1f620791ca6ff7107cf270781e587eced", size = 32218, upload-time = "2026-04-22T15:51:26.296Z" },
 ]
 
 [[package]]
