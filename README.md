@@ -39,14 +39,14 @@ The result is written to `/tmp/cae/<run_id>.json`. The harness skips any (task, 
 ## Run a full eval
 
 ```
-# Small (4 tasks that pass pre-flight)
-sh scripts/run_small_eval.sh
-
-# Full (all tasks in tasks/)
-sh scripts/run_eval.sh
+sh scripts/run_eval.sh           # all tasks in tasks/
+sh scripts/run_eval.sh 1         # first task only (cheap e2e test)
+sh scripts/run_eval.sh 4         # first 4 tasks
+sh scripts/run_eval.sh --small   # alias for 4
+sh scripts/run_eval.sh --help    # show usage
 ```
 
-Each script runs every task × {claude-code, codex}, logs to `results/eval.log`, and prints an aggregated report at the end.
+Tasks are picked in alphabetical order. The script runs every selected task × {claude-code, codex}, logs to `results/eval.log`, and prints an aggregated report at the end.
 
 ## Build the leaderboard site
 

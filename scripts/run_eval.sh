@@ -1,9 +1,15 @@
 #!/bin/sh
-# Run the full eval: every task in tasks/ x {claude-code, codex}, in local mode.
+# Run the eval: tasks in tasks/ x {claude-code, codex}, in local mode.
+#
+# Usage:
+#   sh scripts/run_eval.sh           # all tasks
+#   sh scripts/run_eval.sh 1         # first task only (cheap e2e test)
+#   sh scripts/run_eval.sh 4         # first 4 tasks
+#   sh scripts/run_eval.sh --small   # alias for 4
 #
 # The harness skips any (task, agent) pair whose result JSON already exists,
 # so this is safe to re-run after an interruption. Use --force on the cae
-# invocation to overwrite existing results.
+# invocation to overwrite.
 #
 # Logs to results/eval.log. Each run prints "RUN start" / "RUN done" lines
 # with timestamps so you can tail -f to follow progress.
@@ -27,18 +33,67 @@ log() {
   printf '[%s] %s\n' "$(date '+%Y-%m-%dT%H:%M:%S')" "$*" | tee -a "$LOG"
 }
 
-# Count tasks.
-N_TASKS=$(ls -1d tasks/*/ 2>/dev/null | wc -l | tr -d ' ')
-N_AGENTS=2
+# Discover tasks from the tasks/ dir (each subdir is one instance), sorted.
+# Capture into a positional-parameter list so we don't need bash arrays.
+TASKS_ALL=""
+for d in tasks/*/; do
+  [ -d "$d" ] || continue
+  TASKS_ALL="$TASKS_ALL $(basename "$d")"
+done
+TOTAL_TASKS=$(echo $TASKS_ALL | wc -w | tr -d ' ')
 
-log "Starting eval: $N_TASKS tasks x $N_AGENTS agents = $((N_TASKS * N_AGENTS)) runs"
+# Argument parsing: optional count (or --small).
+LIMIT=""
+case "${1:-}" in
+  "")
+    LIMIT="$TOTAL_TASKS"
+    ;;
+  --small)
+    LIMIT=4
+    ;;
+  -h|--help)
+    sed -n '2,15p' "$0"
+    exit 0
+    ;;
+  --*)
+    echo "error: unknown flag $1" >&2
+    exit 2
+    ;;
+  *)
+    if ! [ "$1" -eq "$1" ] 2>/dev/null || [ "$1" -lt 1 ]; then
+      echo "error: task count must be a positive integer, got '$1'" >&2
+      exit 2
+    fi
+    LIMIT=$1
+    ;;
+esac
+
+if [ "$LIMIT" -gt "$TOTAL_TASKS" ]; then
+  log "Requested $LIMIT tasks but only $TOTAL_TASKS available; using $TOTAL_TASKS"
+  LIMIT=$TOTAL_TASKS
+fi
+
+# Take the first $LIMIT tasks (alphabetical order, same as `ls`).
+N=0
+TASKS=""
+for t in $TASKS_ALL; do
+  N=$((N + 1))
+  if [ "$N" -gt "$LIMIT" ]; then
+    break
+  fi
+  TASKS="$TASKS $t"
+done
+TASKS=${TASKS# }  # strip leading space
+
+N_TASKS=$(echo $TASKS | wc -w | tr -d ' ')
+N_AGENTS=2
+log "Starting eval: $N_TASKS task(s) x $N_AGENTS agents = $((N_TASKS * N_AGENTS)) runs"
+log "Tasks: $TASKS"
 
 # Run all claude-code first, then all codex. Two-agent ordering means we
 # see one agent's cost roll up before the next agent starts (easier to read).
 for agent in claude-code codex; do
-  for task_dir in tasks/*/; do
-    [ -d "$task_dir" ] || continue
-    task=$(basename "$task_dir")
+  for task in $TASKS; do
     log "RUN start: $agent / $task"
     cae run \
         --agent "$agent" \
