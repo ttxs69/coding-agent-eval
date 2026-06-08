@@ -48,6 +48,7 @@ def cmd_run(args: argparse.Namespace) -> int:
             env_file=Path(args.env_file) if args.env_file else None,
             docker_network=args.docker_network,
             docker_extra_mounts=[tuple(m.split(":", 1)) for m in args.docker_mount.split(",")] if args.docker_mount else None,
+            model=args.model,
             repeat=repeat,
             repeat_index=repeat_index,
         )
@@ -206,6 +207,10 @@ def build_parser() -> argparse.ArgumentParser:
                       help="docker network mode (default: bridge). Use 'host' to give container access to host's localhost (e.g. for local LLM proxies).")
     p_run.add_argument("--docker-mount", default=None,
                       help="comma-separated host_path:container_path pairs to bind-mount read-write, e.g. '~/.codex:/home/cae/.codex,~/.claude:/home/cae/.claude'. Used for agent auth dirs.")
+    p_run.add_argument("--model", default=None,
+                      help="model name to pass to the agent (e.g. 'claude-sonnet-4-6', 'gpt-5'). "
+                           "Overrides whatever the agent's config file / env var would otherwise pick. "
+                           "When omitted, the agent uses its configured default.")
     p_run.set_defaults(func=cmd_run)
 
     p_add = sub.add_parser("add-task", help="add a new task under tasks/")

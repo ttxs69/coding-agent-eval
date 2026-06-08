@@ -78,6 +78,68 @@ def mock_with_model(monkeypatch):
     ADAPTERS.pop("mock-model", None)
 
 
+# ---- --model override ---------------------------------------------------
+
+class _ModelCapturingMock(_MockWithModel):
+    """Mock that records the model passed to build_command."""
+    last_model: str | None = None
+    def build_command(self, workdir, prompt, *, model):
+        type(self).last_model = model
+        # Just exit immediately so the harness doesn't run the agent.
+        py = shutil.which("python") or "python3"
+        return [py, "-c", "import sys; sys.exit(0)"]
+
+
+@pytest.fixture
+def model_capturing_mock(monkeypatch):
+    ADAPTERS["mock-model"] = _ModelCapturingMock
+    _ModelCapturingMock.last_model = None
+    yield
+    ADAPTERS.pop("mock-model", None)
+
+
+def test_model_cli_flag_overrides_config(tmp_path, tiny_task_path, model_capturing_mock):
+    """When --model is passed, it's forwarded to build_command and recorded
+    as the result's `model` field, overriding the adapter's default."""
+    import json
+
+    repo_src = tiny_task_path / "repo"
+    workdir = tmp_path / "workdir"
+    subprocess.run(["cp", "-r", str(repo_src), str(workdir)], check=True)
+    subprocess.run(["git", "init", "-q"], cwd=workdir, check=True)
+    subprocess.run(["git", "config", "user.email", "t@x"], cwd=workdir, check=True)
+    subprocess.run(["git", "config", "user.name", "t"], cwd=workdir, check=True)
+    subprocess.run(["git", "add", "."], cwd=workdir, check=True)
+    subprocess.run(["git", "commit", "-q", "-m", "init"], cwd=workdir, check=True)
+
+    result = run(task_path=tiny_task_path, agent_name="mock-model",
+                 workdir=workdir, model="user-chosen-model")
+
+    assert _ModelCapturingMock.last_model == "user-chosen-model"
+    assert result["model"] == "user-chosen-model"
+
+
+def test_model_defaults_to_none_when_omitted(tmp_path, tiny_task_path, model_capturing_mock):
+    """When --model is omitted, the adapter's default_model is used."""
+    import json
+
+    repo_src = tiny_task_path / "repo"
+    workdir = tmp_path / "workdir"
+    subprocess.run(["cp", "-r", str(repo_src), str(workdir)], check=True)
+    subprocess.run(["git", "init", "-q"], cwd=workdir, check=True)
+    subprocess.run(["git", "config", "user.email", "t@x"], cwd=workdir, check=True)
+    subprocess.run(["git", "config", "user.name", "t"], cwd=workdir, check=True)
+    subprocess.run(["git", "add", "."], cwd=workdir, check=True)
+    subprocess.run(["git", "commit", "-q", "-m", "init"], cwd=workdir, check=True)
+
+    result = run(task_path=tiny_task_path, agent_name="mock-model", workdir=workdir)
+
+    # Default behavior: no --model means build_command receives None and the
+    # result falls back to the adapter's default_model.
+    assert _ModelCapturingMock.last_model is None
+    assert result["model"] == "test-model-1"
+
+
 def test_preflight_task_error_records_agent_model_and_version(
     tmp_path, tiny_task_path, mock_with_model,
 ):

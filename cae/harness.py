@@ -152,6 +152,7 @@ def run(
     env_file: Path | None = None,
     docker_network: str = "bridge",
     docker_extra_mounts: list[tuple[str, str]] | None = None,
+    model: str | None = None,
     repeat: int = 1,
     repeat_index: int | None = None,
 ) -> dict:
@@ -214,13 +215,17 @@ def run(
     except Exception:
         agent_version = "unknown"
     try:
-        # Prefer the adapter's _discover_model() (it reads config files
-        # reliably); fall back to default_model for adapters that don't
-        # define it (e.g. the mock adapter).
-        discover = getattr(adapter, "_discover_model", None)
-        agent_model = discover() if discover else getattr(adapter, "default_model", None)
+        # If the user passed --model, that wins over whatever the config
+        # file would say. Otherwise, prefer _discover_model() (reliable
+        # config-file reader); fall back to default_model for adapters
+        # that don't define it (e.g. the mock adapter).
+        if model is not None:
+            agent_model = model
+        else:
+            discover = getattr(adapter, "_discover_model", None)
+            agent_model = discover() if discover else getattr(adapter, "default_model", None)
     except Exception:
-        agent_model = getattr(adapter, "default_model", None)
+        agent_model = model or getattr(adapter, "default_model", None)
 
     _ensure_git_repo(workdir)
     if not _apply_test_patch(workdir, task_dir):
@@ -291,7 +296,7 @@ def run(
     if not adapter.is_available():
         return _result(task, agent_name, mode, Status.AGENT_ERROR, agent_version, pre_flight, pre_flight, "",
                        str(workdir), f"agent {agent_name} not available", agent_model=agent_model)
-    cmd = adapter.build_command(workdir, task["prompt"], model=None)
+    cmd = adapter.build_command(workdir, task["prompt"], model=model)
     agent_rc, agent_stdout, agent_stderr, duration = run_step(cmd, workdir, timeout=timeout_sec)
     if agent_rc == -1:
         return _result(task, agent_name, mode, Status.TIMEOUT, agent_version, pre_flight, pre_flight, "",
