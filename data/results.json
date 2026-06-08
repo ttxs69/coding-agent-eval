@@ -1,28 +1,54 @@
 [
   {
     "agent": "claude-code",
-    "model": "deepseek-v4-pro",
+    "model": "MiniMax-M3",
     "agent_version": "2.1.153 (Claude Code)",
     "n_resolved": 3,
-    "n_attempted": 3,
-    "pass_rate": 1.0,
-    "median_cost_usd": 0.14089000000000002,
-    "median_duration_sec": 18.525054666009964,
-    "median_tokens_in": 20230,
-    "median_tokens_out": 539,
-    "last_run": "2026-06-07T13:57:10Z"
+    "n_attempted": 4,
+    "pass_rate": 0.75,
+    "median_cost_usd": 2.00412575,
+    "median_duration_sec": 603.4566339580342,
+    "median_tokens_in": 172915.0,
+    "median_tokens_out": 23453.0,
+    "last_run": "2026-06-08T03:12:56Z"
   },
   {
     "agent": "codex",
     "model": "MiniMax-M3",
     "agent_version": "codex-cli 0.137.0",
-    "n_resolved": 3,
-    "n_attempted": 3,
-    "pass_rate": 1.0,
+    "n_resolved": 1,
+    "n_attempted": 4,
+    "pass_rate": 0.25,
     "median_cost_usd": null,
-    "median_duration_sec": 36.901816541998414,
-    "median_tokens_in": 84323,
-    "median_tokens_out": 1074,
-    "last_run": "2026-06-07T14:31:07Z"
+    "median_duration_sec": 298.61315977049526,
+    "median_tokens_in": 444141.5,
+    "median_tokens_out": 14047.5,
+    "last_run": "2026-06-08T04:04:05Z"
+  },
+  {
+    "agent": "claude-code",
+    "model": null,
+    "agent_version": "unknown",
+    "n_resolved": 0,
+    "n_attempted": 16,
+    "pass_rate": 0.0,
+    "median_cost_usd": null,
+    "median_duration_sec": 0.0,
+    "median_tokens_in": null,
+    "median_tokens_out": null,
+    "last_run": "2026-06-08T03:18:28Z"
+  },
+  {
+    "agent": "codex",
+    "model": null,
+    "agent_version": "unknown",
+    "n_resolved": 0,
+    "n_attempted": 16,
+    "pass_rate": 0.0,
+    "median_cost_usd": null,
+    "median_duration_sec": 0.0,
+    "median_tokens_in": null,
+    "median_tokens_out": null,
+    "last_run": "2026-06-08T04:09:35Z"
   }
 ]

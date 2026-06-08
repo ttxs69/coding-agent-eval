@@ -1,0 +1,31 @@
+{
+  "run_id": "2026-06-08T03-18-12__claude-code__astropy__astropy-7166",
+  "task_id": "astropy__astropy-7166",
+  "agent": "claude-code",
+  "agent_version": "unknown",
+  "model": null,
+  "mode": "local",
+  "status": "task_error",
+  "started_at": "2026-06-08T03:18:12Z",
+  "duration_sec": 0.0,
+  "harness_git_sha": "dbbc436",
+  "task_source": {
+    "kind": "swe-bench",
+    "split": "test",
+    "original_id": "astropy__astropy-7166",
+    "swe_bench_commit": "c104f840cc67f8b6eec6f759ebc8b2693d585d4a"
+  },
+  "usage": {
+    "tokens_in": null,
+    "tokens_out": null,
+    "cost_usd": null,
+    "billing_mode": "api"
+  },
+  "test_results": {
+    "pre_flight": {},
+    "post_flight": {}
+  },
+  "patch": "",
+  "workdir": "/var/folders/wd/n_p084lj52xb8hbrg6m9zfdm0000gn/T/cae-zclwe_5y",
+  "error": "setup_cmd failed:   error: subprocess-exited-with-error\n  \n  \u00d7 python setup.py egg_info did not run successfully.\n  \u2502 exit code: 1\n  \u2570\u2500> [27 lines of output]\n      Initializing astropy_helpers submodule with: `git subm"
+}

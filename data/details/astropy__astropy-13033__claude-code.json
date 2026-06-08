@@ -1,0 +1,83 @@
+{
+  "run_id": "2026-06-08T02-35-02__claude-code__astropy__astropy-13033",
+  "task_id": "astropy__astropy-13033",
+  "agent": "claude-code",
+  "agent_version": "2.1.153 (Claude Code)",
+  "model": "MiniMax-M3",
+  "mode": "local",
+  "status": "resolved",
+  "started_at": "2026-06-08T02:35:02Z",
+  "duration_sec": 374.7416151660145,
+  "harness_git_sha": "05bf567",
+  "task_source": {
+    "kind": "swe-bench",
+    "split": "test",
+    "original_id": "astropy__astropy-13033",
+    "swe_bench_commit": "c104f840cc67f8b6eec6f759ebc8b2693d585d4a"
+  },
+  "usage": {
+    "tokens_in": 172354,
+    "tokens_out": 13527,
+    "cost_usd": 1.8523175,
+    "billing_mode": "api"
+  },
+  "test_results": {
+    "pre_flight": {
+      "fail_to_pass": {
+        "astropy/timeseries/tests/test_sampled.py::test_required_columns": "failed"
+      },
+      "pass_to_pass": {
+        "astropy/timeseries/tests/test_sampled.py::test_empty_initialization": "passed",
+        "astropy/timeseries/tests/test_sampled.py::test_empty_initialization_invalid": "passed",
+        "astropy/timeseries/tests/test_sampled.py::test_initialize_only_time": "passed",
+        "astropy/timeseries/tests/test_sampled.py::test_initialization_with_data": "passed",
+        "astropy/timeseries/tests/test_sampled.py::test_initialize_only_data": "passed",
+        "astropy/timeseries/tests/test_sampled.py::test_initialization_with_table": "passed",
+        "astropy/timeseries/tests/test_sampled.py::test_initialization_missing_time_delta": "passed",
+        "astropy/timeseries/tests/test_sampled.py::test_initialization_invalid_time_and_time_start": "passed",
+        "astropy/timeseries/tests/test_sampled.py::test_initialization_invalid_time_delta": "passed",
+        "astropy/timeseries/tests/test_sampled.py::test_initialization_with_time_in_data": "passed",
+        "astropy/timeseries/tests/test_sampled.py::test_initialization_n_samples": "passed",
+        "astropy/timeseries/tests/test_sampled.py::test_initialization_length_mismatch": "passed",
+        "astropy/timeseries/tests/test_sampled.py::test_initialization_invalid_both_time_and_time_delta": "passed",
+        "astropy/timeseries/tests/test_sampled.py::test_fold": "passed",
+        "astropy/timeseries/tests/test_sampled.py::test_fold_invalid_options": "passed",
+        "astropy/timeseries/tests/test_sampled.py::test_read_time_missing": "passed",
+        "astropy/timeseries/tests/test_sampled.py::test_read_time_wrong": "passed",
+        "astropy/timeseries/tests/test_sampled.py::test_read": "passed",
+        "astropy/timeseries/tests/test_sampled.py::test_periodogram[BoxLeastSquares]": "passed",
+        "astropy/timeseries/tests/test_sampled.py::test_periodogram[LombScargle]": "passed"
+      }
+    },
+    "post_flight": {
+      "fail_to_pass": {
+        "astropy/timeseries/tests/test_sampled.py::test_required_columns": "passed"
+      },
+      "pass_to_pass": {
+        "astropy/timeseries/tests/test_sampled.py::test_empty_initialization": "passed",
+        "astropy/timeseries/tests/test_sampled.py::test_empty_initialization_invalid": "passed",
+        "astropy/timeseries/tests/test_sampled.py::test_initialize_only_time": "passed",
+        "astropy/timeseries/tests/test_sampled.py::test_initialization_with_data": "passed",
+        "astropy/timeseries/tests/test_sampled.py::test_initialize_only_data": "passed",
+        "astropy/timeseries/tests/test_sampled.py::test_initialization_with_table": "passed",
+        "astropy/timeseries/tests/test_sampled.py::test_initialization_missing_time_delta": "passed",
+        "astropy/timeseries/tests/test_sampled.py::test_initialization_invalid_time_and_time_start": "passed",
+        "astropy/timeseries/tests/test_sampled.py::test_initialization_invalid_time_delta": "passed",
+        "astropy/timeseries/tests/test_sampled.py::test_initialization_with_time_in_data": "passed",
+        "astropy/timeseries/tests/test_sampled.py::test_initialization_n_samples": "passed",
+        "astropy/timeseries/tests/test_sampled.py::test_initialization_length_mismatch": "passed",
+        "astropy/timeseries/tests/test_sampled.py::test_initialization_invalid_both_time_and_time_delta": "passed",
+        "astropy/timeseries/tests/test_sampled.py::test_fold": "passed",
+        "astropy/timeseries/tests/test_sampled.py::test_fold_invalid_options": "passed",
+        "astropy/timeseries/tests/test_sampled.py::test_read_time_missing": "passed",
+        "astropy/timeseries/tests/test_sampled.py::test_read_time_wrong": "passed",
+        "astropy/timeseries/tests/test_sampled.py::test_read": "passed",
+        "astropy/timeseries/tests/test_sampled.py::test_periodogram[BoxLeastSquares]": "passed",
+        "astropy/timeseries/tests/test_sampled.py::test_periodogram[LombScargle]": "passed"
+      }
+    }
+  },
+  "patch": "diff --git a/astropy/timeseries/core.py b/astropy/timeseries/core.py\nindex c279f35..2a44c18 100644\n--- a/astropy/timeseries/core.py\n+++ b/astropy/timeseries/core.py\n@@ -76,9 +76,16 @@ class BaseTimeSeries(QTable):\n \n             elif self.colnames[:len(required_columns)] != required_columns:\n \n-                raise ValueError(\"{} object is invalid - expected '{}' \"\n-                                 \"as the first column{} but found '{}'\"\n-                                 .format(self.__class__.__name__, required_columns[0], plural, self.colnames[0]))\n+                if len(required_columns) == 1:\n+                    expected = \"'{}'\".format(required_columns[0])\n+                    found = \"'{}'\".format(self.colnames[0])\n+                else:\n+                    expected = str(required_columns)\n+                    found = str(self.colnames[:len(required_columns)])\n+\n+                raise ValueError(\"{} object is invalid - expected {} \"\n+                                 \"as the first column{} but found {}\"\n+                                 .format(self.__class__.__name__, expected, plural, found))\n \n             if (self._required_columns_relax\n                     and self._required_columns == self.colnames[:len(self._required_columns)]):\ndiff --git a/astropy/timeseries/tests/test_sampled.py b/astropy/timeseries/tests/test_sampled.py\nindex bcc06d9..241d711 100644\n--- a/astropy/timeseries/tests/test_sampled.py\n+++ b/astropy/timeseries/tests/test_sampled.py\n@@ -395,6 +395,14 @@ def test_required_columns():\n     assert exc.value.args[0] == (\"TimeSeries object is invalid - expected \"\n                                  \"'time' as the first column but found 'banana'\")\n \n+    # https://github.com/astropy/astropy/issues/13009\n+    ts_2cols_required = ts.copy()\n+    ts_2cols_required._required_columns = ['time', 'a']\n+    with pytest.raises(ValueError) as exc:\n+        ts_2cols_required.remove_column('a')\n+    assert exc.value.args[0] == (\"TimeSeries object is invalid - expected \"\n+                                 \"['time', 'a'] as the first columns but found ['time', 'b']\")\n+\n \n @pytest.mark.parametrize('cls', [BoxLeastSquares, LombScargle])\n def test_periodogram(cls):\n",
+  "workdir": "/var/folders/wd/n_p084lj52xb8hbrg6m9zfdm0000gn/T/cae-nr3f7nk0",
+  "error": ""
+}

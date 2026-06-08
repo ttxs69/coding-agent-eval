@@ -1,0 +1,111 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>astropy__astropy-13033</title>
+<style>body{font:14px/1.4 system-ui,sans-serif;max-width:900px;margin:2em auto;padding:0 1em}
+pre{background:#f5f5f5;padding:1em;overflow-x:auto}
+@media(prefers-color-scheme:dark){body{background:#1a1a1a;color:#ddd}pre{background:#222}}
+</style></head><body>
+<h1>astropy__astropy-13033</h1>
+<details>
+<summary><strong>claude-code</strong> — resolved</summary>
+<p>Model: <code>MiniMax-M3</code> &middot;
+   Duration: 375s &middot;
+   Cost: $1.85</p>
+<pre><code>diff --git a/astropy/timeseries/core.py b/astropy/timeseries/core.py
+index c279f35..2a44c18 100644
+--- a/astropy/timeseries/core.py
++++ b/astropy/timeseries/core.py
+@@ -76,9 +76,16 @@ class BaseTimeSeries(QTable):
+ 
+             elif self.colnames[:len(required_columns)] != required_columns:
+ 
+-                raise ValueError(&quot;{} object is invalid - expected &#x27;{}&#x27; &quot;
+-                                 &quot;as the first column{} but found &#x27;{}&#x27;&quot;
+-                                 .format(self.__class__.__name__, required_columns[0], plural, self.colnames[0]))
++                if len(required_columns) == 1:
++                    expected = &quot;&#x27;{}&#x27;&quot;.format(required_columns[0])
++                    found = &quot;&#x27;{}&#x27;&quot;.format(self.colnames[0])
++                else:
++                    expected = str(required_columns)
++                    found = str(self.colnames[:len(required_columns)])
++
++                raise ValueError(&quot;{} object is invalid - expected {} &quot;
++                                 &quot;as the first column{} but found {}&quot;
++                                 .format(self.__class__.__name__, expected, plural, found))
+ 
+             if (self._required_columns_relax
+                     and self._required_columns == self.colnames[:len(self._required_columns)]):
+diff --git a/astropy/timeseries/tests/test_sampled.py b/astropy/timeseries/tests/test_sampled.py
+index bcc06d9..241d711 100644
+--- a/astropy/timeseries/tests/test_sampled.py
++++ b/astropy/timeseries/tests/test_sampled.py
+@@ -395,6 +395,14 @@ def test_required_columns():
+     assert exc.value.args[0] == (&quot;TimeSeries object is invalid - expected &quot;
+                                  &quot;&#x27;time&#x27; as the first column but found &#x27;banana&#x27;&quot;)
+ 
++    # https://github.com/astropy/astropy/issues/13009
++    ts_2cols_required = ts.copy()
++    ts_2cols_required._required_columns = [&#x27;time&#x27;, &#x27;a&#x27;]
++    with pytest.raises(ValueError) as exc:
++        ts_2cols_required.remove_column(&#x27;a&#x27;)
++    assert exc.value.args[0] == (&quot;TimeSeries object is invalid - expected &quot;
++                                 &quot;[&#x27;time&#x27;, &#x27;a&#x27;] as the first columns but found [&#x27;time&#x27;, &#x27;b&#x27;]&quot;)
++
+ 
+ @pytest.mark.parametrize(&#x27;cls&#x27;, [BoxLeastSquares, LombScargle])
+ def test_periodogram(cls):
+</code></pre>
+</details><details>
+<summary><strong>codex</strong> — failed</summary>
+<p>Model: <code>MiniMax-M3</code> &middot;
+   Duration: 206s &middot;
+   Cost: $?</p>
+<pre><code>diff --git a/astropy/timeseries/core.py b/astropy/timeseries/core.py
+index c279f35..b90bc63 100644
+--- a/astropy/timeseries/core.py
++++ b/astropy/timeseries/core.py
+@@ -76,9 +76,19 @@ class BaseTimeSeries(QTable):
+ 
+             elif self.colnames[:len(required_columns)] != required_columns:
+ 
+-                raise ValueError(&quot;{} object is invalid - expected &#x27;{}&#x27; &quot;
+-                                 &quot;as the first column{} but found &#x27;{}&#x27;&quot;
+-                                 .format(self.__class__.__name__, required_columns[0], plural, self.colnames[0]))
++                missing_columns = [c for c in required_columns
++                                   if c not in self.colnames]
++
++                if missing_columns:
++                    raise ValueError(
++                        &quot;{} object is invalid - missing required column{}: {}&quot;
++                        .format(self.__class__.__name__,
++                                &#x27;s&#x27; if len(missing_columns) &gt; 1 else &#x27;&#x27;,
++                                &#x27;, &#x27;.join(repr(c) for c in missing_columns)))
++                else:
++                    raise ValueError(&quot;{} object is invalid - expected &#x27;{}&#x27; &quot;
++                                     &quot;as the first column{} but found &#x27;{}&#x27;&quot;
++                                     .format(self.__class__.__name__, required_columns[0], plural, self.colnames[0]))
+ 
+             if (self._required_columns_relax
+                     and self._required_columns == self.colnames[:len(self._required_columns)]):
+diff --git a/astropy/timeseries/tests/test_sampled.py b/astropy/timeseries/tests/test_sampled.py
+index bcc06d9..241d711 100644
+--- a/astropy/timeseries/tests/test_sampled.py
++++ b/astropy/timeseries/tests/test_sampled.py
+@@ -395,6 +395,14 @@ def test_required_columns():
+     assert exc.value.args[0] == (&quot;TimeSeries object is invalid - expected &quot;
+                                  &quot;&#x27;time&#x27; as the first column but found &#x27;banana&#x27;&quot;)
+ 
++    # https://github.com/astropy/astropy/issues/13009
++    ts_2cols_required = ts.copy()
++    ts_2cols_required._required_columns = [&#x27;time&#x27;, &#x27;a&#x27;]
++    with pytest.raises(ValueError) as exc:
++        ts_2cols_required.remove_column(&#x27;a&#x27;)
++    assert exc.value.args[0] == (&quot;TimeSeries object is invalid - expected &quot;
++                                 &quot;[&#x27;time&#x27;, &#x27;a&#x27;] as the first columns but found [&#x27;time&#x27;, &#x27;b&#x27;]&quot;)
++
+ 
+ @pytest.mark.parametrize(&#x27;cls&#x27;, [BoxLeastSquares, LombScargle])
+ def test_periodogram(cls):
+</code></pre>
+</details>
+<p><a href="../index.html">back to leaderboard</a></p>
+</body></html>
