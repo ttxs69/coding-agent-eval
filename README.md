@@ -1,4 +1,4 @@
-# probe-agent-eval
+# coding-agent-eval
 
 Public, reproducible benchmark for CLI coding agents. Compare Claude Code, Codex, Aider, and more on the same set of real-world tasks.
 
