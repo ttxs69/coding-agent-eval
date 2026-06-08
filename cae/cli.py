@@ -103,6 +103,49 @@ def cmd_list_agents(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_list_tasks(args: argparse.Namespace) -> int:
+    """List every task under tasks-dir, with status counts from results-dir."""
+    from pathlib import Path
+    import json
+    from collections import Counter
+
+    tasks_dir = Path(args.tasks_dir)
+    if not tasks_dir.is_dir():
+        print(f"error: tasks dir not found: {tasks_dir}", file=sys.stderr)
+        return 2
+
+    results_dir = Path(args.results_dir) if args.results_dir else None
+    # status[instance_id] = Counter of statuses across all (agent) results
+    statuses: dict[str, Counter] = {}
+    if results_dir and results_dir.is_dir():
+        for f in sorted(results_dir.glob("*.json")):
+            d = json.loads(f.read_text())
+            if d.get("agent") == "mock":
+                continue
+            statuses.setdefault(d["task_id"], Counter())[d["status"]] += 1
+
+    tasks = sorted(t for t in tasks_dir.iterdir() if t.is_dir())
+    if not tasks:
+        print(f"(no tasks under {tasks_dir})")
+        return 0
+
+    print(f"{'INSTANCE_ID':<40} {'REPO':<25} STATUSES")
+    for t in tasks:
+        try:
+            data = json.loads((t / "task.json").read_text())
+            instance_id = data.get("instance_id", t.name)
+            repo = data.get("repo", "?")
+        except Exception:
+            instance_id, repo = t.name, "?"
+        s = statuses.get(instance_id)
+        if s:
+            summary = ", ".join(f"{k}:{v}" for k, v in sorted(s.items()))
+        else:
+            summary = "(no results)"
+        print(f"{instance_id:<40} {repo:<25} {summary}")
+    return 0
+
+
 def cmd_build_site(args: argparse.Namespace) -> int:
     from cae.site import build_site
     build_site(
@@ -230,6 +273,11 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_la = sub.add_parser("list-agents", help="list registered agent adapters and availability")
     p_la.set_defaults(func=cmd_list_agents)
+
+    p_lt = sub.add_parser("list-tasks", help="list every task under tasks-dir, with status counts from results-dir")
+    p_lt.add_argument("--tasks-dir", default="tasks", help="where to look for tasks (default: tasks)")
+    p_lt.add_argument("--results-dir", default="results", help="where to look for result JSONs (default: results)")
+    p_lt.set_defaults(func=cmd_list_tasks)
 
     p_rep = sub.add_parser("report", help="aggregate and display results")
     p_rep.add_argument("--results-dir", default="results", help="where to read result JSONs (default: results)")
