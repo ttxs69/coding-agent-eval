@@ -106,6 +106,51 @@ def test_codex_parse_output_extracts_usage():
     assert result.usage.tokens_in == 200
     assert result.usage.tokens_out == 80
     assert result.usage.model == "gpt-5"
+    # No cache fields in the input — defaults to None.
+    assert result.usage.cache_read_tokens is None
+    assert result.usage.cache_creation_tokens is None
+
+
+def test_claude_parse_output_extracts_cache_tokens():
+    """cache_read_input_tokens and cache_creation_input_tokens are part of
+    Anthropic's billing model (cache reads cost ~10% of fresh input) so we
+    capture them separately."""
+    from cae.agents.claude_code import ClaudeCodeAdapter
+    fake = json.dumps({
+        "type": "result",
+        "total_cost_usd": 0.42,
+        "usage": {
+            "input_tokens": 100,
+            "output_tokens": 50,
+            "cache_read_input_tokens": 9000,
+            "cache_creation_input_tokens": 200,
+        },
+        "model": "claude-opus-4-7",
+    })
+    result = ClaudeCodeAdapter().parse_output(fake, "", 0)
+    assert result.usage.tokens_in == 100
+    assert result.usage.tokens_out == 50
+    assert result.usage.cache_read_tokens == 9000
+    assert result.usage.cache_creation_tokens == 200
+
+
+def test_codex_parse_output_extracts_cached_input_tokens():
+    """Codex may use `cached_input_tokens` (its naming convention)."""
+    from cae.agents.codex import CodexAdapter
+    fake = json.dumps({
+        "type": "turn.completed",
+        "usage": {
+            "input_tokens": 200,
+            "output_tokens": 80,
+            "cached_input_tokens": 5000,
+            "cache_creation_input_tokens": 100,
+        },
+        "model": "gpt-5",
+    })
+    result = CodexAdapter().parse_output(fake, "", 0)
+    assert result.usage.tokens_in == 200
+    assert result.usage.cache_read_tokens == 5000
+    assert result.usage.cache_creation_tokens == 100
 
 
 def test_aider_adapter_build_command_includes_prompt():

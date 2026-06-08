@@ -112,11 +112,17 @@ class ClaudeCodeAdapter:
                     raw_name = next(iter(model_usage.keys()), None)
                     if raw_name is not None:
                         model = _clean_model_name(raw_name)
-                # Tokens live at envelope.usage.{input,output}_tokens, but
-                # cache_read_input_tokens also contributes to cost.
+                # Tokens live at envelope.usage.{input,output}_tokens.
+                # cache_read_input_tokens and cache_creation_input_tokens
+                # are also part of billing on Anthropic's API (cache reads
+                # cost ~10% of fresh input; cache writes cost slightly
+                # more). We capture them separately so the leaderboard can
+                # surface how much each agent relies on prompt caching.
                 usage = envelope.get("usage") or {}
                 tokens_in = usage.get("input_tokens")
                 tokens_out = usage.get("output_tokens")
+                cache_read = usage.get("cache_read_input_tokens")
+                cache_creation = usage.get("cache_creation_input_tokens")
                 if model is None:
                     model = envelope.get("model")
             if model is None:
@@ -127,6 +133,8 @@ class ClaudeCodeAdapter:
             log=stdout + stderr,
             usage=UsageInfo(
                 tokens_in=tokens_in, tokens_out=tokens_out,
+                cache_read_tokens=cache_read,
+                cache_creation_tokens=cache_creation,
                 cost_usd=cost, model=model, billing_mode="api",
             ),
             exit_code=exit_code,

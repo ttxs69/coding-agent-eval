@@ -42,10 +42,18 @@ class TestStatus(StrEnum):
 
 @dataclass
 class UsageInfo:
-    """Best-effort token and cost accounting. Fields are None when unknown."""
+    """Best-effort token and cost accounting. Fields are None when unknown.
+
+    `tokens_in` is the *uncached* fresh input tokens. Cached input tokens
+    are reported separately as `cache_read_tokens` (cache hits) and
+    `cache_creation_tokens` (cache writes). All three contribute to
+    billing on most APIs, but at different per-token rates.
+    """
 
     tokens_in: int | None = None
     tokens_out: int | None = None
+    cache_read_tokens: int | None = None
+    cache_creation_tokens: int | None = None
     cost_usd: float | None = None
     model: str | None = None
     billing_mode: str = "api"  # "api" or "subscription"

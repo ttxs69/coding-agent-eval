@@ -62,6 +62,8 @@ def aggregate_results(results_dir: Path) -> list[dict]:
             "median_duration_sec": _median([r.get("duration_sec") for r in attempted]),
             "median_tokens_in": _median([(r.get("usage") or {}).get("tokens_in") for r in attempted]),
             "median_tokens_out": _median([(r.get("usage") or {}).get("tokens_out") for r in attempted]),
+            "median_cache_read_tokens": _median([(r.get("usage") or {}).get("cache_read_tokens") for r in attempted]),
+            "median_cache_creation_tokens": _median([(r.get("usage") or {}).get("cache_creation_tokens") for r in attempted]),
             "last_run": max(r.get("started_at", "") for r in results),
         })
     rows.sort(key=lambda r: r["pass_rate"], reverse=True)

@@ -352,6 +352,8 @@ def _result(task, agent_name, mode, status, agent_version, pre_flight, post_flig
         "usage": {
             "tokens_in": agent_usage.tokens_in if agent_usage else None,
             "tokens_out": agent_usage.tokens_out if agent_usage else None,
+            "cache_read_tokens": agent_usage.cache_read_tokens if agent_usage else None,
+            "cache_creation_tokens": agent_usage.cache_creation_tokens if agent_usage else None,
             "cost_usd": agent_usage.cost_usd if agent_usage else None,
             "billing_mode": agent_usage.billing_mode if agent_usage else "api",
         },

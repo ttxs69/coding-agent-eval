@@ -67,6 +67,8 @@ class CodexAdapter:
         cost = None
         tokens_in = None
         tokens_out = None
+        cache_read = None
+        cache_creation = None
         model = None
         try:
             for line in stdout.splitlines():
@@ -79,6 +81,10 @@ class CodexAdapter:
                     cost = usage.get("cost_usd")
                     tokens_in = usage.get("input_tokens")
                     tokens_out = usage.get("output_tokens")
+                    # Codex's schema may evolve; capture cache fields
+                    # opportunistically and leave None if absent.
+                    cache_read = usage.get("cached_input_tokens") or usage.get("cache_read_input_tokens")
+                    cache_creation = usage.get("cache_creation_input_tokens")
                     # Model is not in turn.completed; try other places
                     model = obj.get("model") or obj.get("model_id")
         except Exception:
@@ -90,6 +96,8 @@ class CodexAdapter:
             log=stdout + stderr,
             usage=UsageInfo(
                 tokens_in=tokens_in, tokens_out=tokens_out,
+                cache_read_tokens=cache_read,
+                cache_creation_tokens=cache_creation,
                 cost_usd=cost, model=model, billing_mode="api",
             ),
             exit_code=exit_code,

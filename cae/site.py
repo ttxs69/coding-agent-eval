@@ -58,6 +58,21 @@ def _fmt_int(v):
     return f"{v:.0f}" if v is not None else "?"
 
 
+def _fmt_tokens_with_cache(r: dict) -> str:
+    """Show median input+output tokens, with cache share appended when known.
+
+    Example: ``250k (60% cached)`` or ``250k``.
+    """
+    in_t = r.get("median_tokens_in") or 0
+    out_t = r.get("median_tokens_out") or 0
+    cache_read = r.get("median_cache_read_tokens")
+    total_input = (in_t or 0) + (cache_read or 0)
+    if total_input and cache_read:
+        pct = round(100 * cache_read / total_input)
+        return f"{_fmt_int(in_t + out_t)} ({pct}% cached)"
+    return _fmt_int(in_t + out_t)
+
+
 def _index_html(rows: list[dict], harness_sha: str) -> str:
     rows_html = "\n".join(
         f"<tr><td>{html.escape(r['agent'])}</td>"
@@ -67,7 +82,7 @@ def _index_html(rows: list[dict], harness_sha: str) -> str:
         f"<td>{r.get('n_skipped_harness', 0)}</td>"
         f"<td>{_fmt_cost(r['median_cost_usd'])}</td>"
         f"<td>{_fmt_dur(r.get('median_duration_sec'))}</td>"
-        f"<td>{_fmt_int((r.get('median_tokens_in') or 0) + (r.get('median_tokens_out') or 0))}</td>"
+        f"<td>{_fmt_tokens_with_cache(r)}</td>"
         f"<td>{r['last_run']}</td></tr>"
         for r in rows
     )
@@ -92,7 +107,7 @@ footer {{ margin-top: 2em; color: #888; font-size: 12px; }}
 <table id="lb">
 <thead><tr>
   <th>Agent</th><th>Model</th><th>Pass rate</th><th># tasks</th><th>Skipped</th>
-  <th>Median cost</th><th>Median time</th><th>Median tokens (in+out)</th>
+  <th>Median cost</th><th>Median time</th><th>Median tokens (in+out, % cached)</th>
   <th>Last run</th>
 </tr></thead>
 <tbody>

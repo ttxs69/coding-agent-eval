@@ -91,3 +91,19 @@ def test_aggregate_excludes_task_error_from_pass_rate(two_results_dir):
 def test_aggregate_skipped_harness_zero_when_all_attempted(two_results_dir):
     rows = aggregate_results(two_results_dir)
     assert rows[0]["n_skipped_harness"] == 0
+
+
+def test_aggregate_median_cache_tokens(two_results_dir):
+    """Cache read/creation tokens are aggregated alongside input/output."""
+    (two_results_dir / "r6.json").write_text(json.dumps({
+        "agent": "claude-code", "agent_version": "1.0", "model": "claude-opus-4-7",
+        "status": "resolved", "duration_sec": 100, "usage": {
+            "tokens_in": 100, "tokens_out": 50,
+            "cache_read_tokens": 9000, "cache_creation_tokens": 200,
+            "cost_usd": 0.42,
+        },
+        "test_results": {}, "task_id": "t3",
+    }))
+    rows = aggregate_results(two_results_dir)
+    assert rows[0]["median_cache_read_tokens"] == 9000
+    assert rows[0]["median_cache_creation_tokens"] == 200
