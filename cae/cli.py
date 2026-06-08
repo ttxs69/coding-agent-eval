@@ -28,7 +28,15 @@ def cmd_run(args: argparse.Namespace) -> int:
     if args.workdir:
         workdir = Path(args.workdir)
     repeat = max(1, args.repeat)
+    spent = 0.0  # running total of cost_usd across the loop, for --max-cost-usd
+    max_cost = args.max_cost_usd
     for i in range(1, repeat + 1):
+        if max_cost is not None and spent > max_cost:
+            print(
+                f"budget exhausted: spent ${spent:.4f} > max ${max_cost:.4f}; stopping at i={i}/{repeat}",
+                file=sys.stderr,
+            )
+            break
         repeat_index = i if repeat > 1 else None
         suffix = f"__{i}" if repeat_index is not None else ""
         out_pattern = f"*__{args.agent}__{instance_id}{suffix}.json"
@@ -56,6 +64,12 @@ def cmd_run(args: argparse.Namespace) -> int:
         out.write_text(json.dumps(result, indent=2, default=str))
         print(f"wrote {out}")
         print(f"status: {result['status']}")
+        # Accumulate cost (subscription-billed runs have cost_usd=None;
+        # treat that as $0 for budget purposes).
+        cost = (result.get("usage") or {}).get("cost_usd") or 0.0
+        spent += cost
+        if max_cost is not None:
+            print(f"spent: ${spent:.4f} / max ${max_cost:.4f}")
     return 0
 
 
@@ -254,6 +268,10 @@ def build_parser() -> argparse.ArgumentParser:
                       help="model name to pass to the agent (e.g. 'claude-sonnet-4-6', 'gpt-5'). "
                            "Overrides whatever the agent's config file / env var would otherwise pick. "
                            "When omitted, the agent uses its configured default.")
+    p_run.add_argument("--max-cost-usd", type=float, default=None,
+                      help="abort the --repeat loop if cumulative cost reaches this value. "
+                           "Subscription-billed runs (cost_usd=None) count as $0. "
+                           "Only useful with --repeat > 1.")
     p_run.set_defaults(func=cmd_run)
 
     p_add = sub.add_parser("add-task", help="add a new task under tasks/")
