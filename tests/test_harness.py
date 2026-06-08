@@ -1,6 +1,5 @@
 import shutil
 import subprocess
-from pathlib import Path
 
 import pytest
 
@@ -101,7 +100,6 @@ def model_capturing_mock(monkeypatch):
 def test_model_cli_flag_overrides_config(tmp_path, tiny_task_path, model_capturing_mock):
     """When --model is passed, it's forwarded to build_command and recorded
     as the result's `model` field, overriding the adapter's default."""
-    import json
 
     repo_src = tiny_task_path / "repo"
     workdir = tmp_path / "workdir"
@@ -121,7 +119,6 @@ def test_model_cli_flag_overrides_config(tmp_path, tiny_task_path, model_capturi
 
 def test_model_defaults_to_none_when_omitted(tmp_path, tiny_task_path, model_capturing_mock):
     """When --model is omitted, the adapter's default_model is used."""
-    import json
 
     repo_src = tiny_task_path / "repo"
     workdir = tmp_path / "workdir"
