@@ -64,6 +64,7 @@ def _index_html(rows: list[dict], harness_sha: str) -> str:
         f"<td>{html.escape(str(r['model'] or ''))}</td>"
         f"<td>{r['pass_rate']*100:.0f}%</td>"
         f"<td>{r['n_attempted']}</td>"
+        f"<td>{r.get('n_skipped_harness', 0)}</td>"
         f"<td>{_fmt_cost(r['median_cost_usd'])}</td>"
         f"<td>{_fmt_dur(r.get('median_duration_sec'))}</td>"
         f"<td>{_fmt_int((r.get('median_tokens_in') or 0) + (r.get('median_tokens_out') or 0))}</td>"
@@ -90,7 +91,7 @@ footer {{ margin-top: 2em; color: #888; font-size: 12px; }}
 <p>Public, reproducible benchmark of CLI coding agents on SWE-bench Verified.</p>
 <table id="lb">
 <thead><tr>
-  <th>Agent</th><th>Model</th><th>Pass rate</th><th># tasks</th>
+  <th>Agent</th><th>Model</th><th>Pass rate</th><th># tasks</th><th>Skipped</th>
   <th>Median cost</th><th>Median time</th><th>Median tokens (in+out)</th>
   <th>Last run</th>
 </tr></thead>

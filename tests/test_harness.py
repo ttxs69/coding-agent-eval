@@ -1,5 +1,6 @@
 import shutil
 import subprocess
+from pathlib import Path
 
 import pytest
 
@@ -57,3 +58,64 @@ def test_run_resolves_tiny_task_with_fixing_mock(tmp_path, tiny_task_path, fixin
     assert "main.py" in result["patch"]  # the harness captured a diff
     assert result["test_results"]["post_flight"]["fail_to_pass"]["test_main.py::test_add"] == "passed"
     assert result["test_results"]["post_flight"]["pass_to_pass"]["test_main.py::test_multiply"] == "passed"
+
+
+# ---- pre-flight failure records model + version -------------------------
+
+class _MockWithModel(MockAdapter):
+    """A mock adapter that advertises a known model and version."""
+    name = "mock-model"  # avoid colliding with the default "mock" key
+    default_model = "test-model-1"
+    def version(self) -> str:
+        return "test-mock-0.1.0"
+
+
+@pytest.fixture
+def mock_with_model(monkeypatch):
+    """Register _MockWithModel as 'mock-model' for the duration of one test."""
+    ADAPTERS["mock-model"] = _MockWithModel
+    yield
+    ADAPTERS.pop("mock-model", None)
+
+
+def test_preflight_task_error_records_agent_model_and_version(
+    tmp_path, tiny_task_path, mock_with_model,
+):
+    """When pre-flight fails (test names don't match pytest output), the result
+    should still record agent_version and agent_model so the leaderboard doesn't
+    group pre-flight failures as a separate '(unknown)' row."""
+    import json
+
+    bad_task = tmp_path / "bad_task"
+    bad_task.mkdir()
+    (bad_task / "task.json").write_text(json.dumps({
+        "instance_id": "bad__task-1",
+        "repo": "bad/repo",
+        "base_commit": "0" * 40,
+        "prompt": "do something",
+        "setup_cmd": "",
+        "test_cmd": "python -m pytest -vs",
+        # pytest will run test_main.py::test_add and test_main.py::test_multiply.
+        # Pretend fail_to_pass/pass_to_pass reference tests that don't exist.
+        "fail_to_pass": ["test_main.py::test_does_not_exist"],
+        "pass_to_pass": ["test_main.py::test_also_missing"],
+    }))
+    repo_src = tiny_task_path / "repo"
+    workdir = tmp_path / "workdir"
+    subprocess.run(["cp", "-r", str(repo_src), str(workdir)], check=True)
+    subprocess.run(["git", "init", "-q"], cwd=workdir, check=True)
+    subprocess.run(["git", "config", "user.email", "t@x"], cwd=workdir, check=True)
+    subprocess.run(["git", "config", "user.name", "t"], cwd=workdir, check=True)
+    subprocess.run(["git", "add", "."], cwd=workdir, check=True)
+    subprocess.run(["git", "commit", "-q", "-m", "init"], cwd=workdir, check=True)
+
+    result = run(task_path=bad_task, agent_name="mock-model", workdir=workdir)
+
+    assert result["status"] == "task_error"
+    # agent_version + agent_model are captured even though the agent never ran.
+    assert result["agent_version"] == "test-mock-0.1.0"
+    assert result["model"] == "test-model-1"
+    # And the error message is diagnostic, listing what was missing.
+    assert "not in pytest output" in result["error"]
+    assert "fail_to_pass" in result["error"]
+    assert "pass_to_pass" in result["error"]

@@ -6,7 +6,9 @@ import pytest
 from cae.importer import (
     _narrow_test_cmd,
     import_swebench_instance,
+    MalformedTestIdsError,
     SWEbenchRecord,
+    validate_test_ids,
 )
 
 
@@ -159,4 +161,86 @@ def test_load_swebench_records_deserializes_json_lists(monkeypatch):
     records = list(load_swebench_records(split="test", limit=1))
     assert records[0].fail_to_pass == ["a.py::t1", "a.py::t2"]
     assert records[0].pass_to_pass == ["a.py::t3"]
+
+
+# ---- validate_test_ids --------------------------------------------------
+
+def test_validate_test_ids_keeps_well_formed():
+    valid = [
+        "tests/test_x.py::test_y",
+        "tests/test_x.py::TestClass::test_method",
+        "tests/test_x.py::test_z[1]",
+        "tests/test_x.py::TestClass::test_method[a-b-c]",
+    ]
+    assert validate_test_ids(valid) == valid
+
+
+def test_validate_test_ids_drops_truncated_brackets():
+    # SWE-bench Verified has these patterns in some astropy tasks.
+    malformed = [
+        "tests/test_x.py::test_y[ceci",       # missing ]
+        "tests/test_x.py::test_z[sin(",      # unclosed paren
+        "tests/test_x.py::test_a[0.1",       # truncated value
+        "tests/test_x.py::test_b[km",        # truncated value
+        "tests/test_x.py::test_c[home_is_data,",  # trailing comma
+    ]
+    assert validate_test_ids(malformed) == []
+
+
+def test_validate_test_ids_keeps_some_drops_some():
+    ids = [
+        "tests/test_x.py::test_y[1]",         # valid
+        "tests/test_x.py::test_z[ceci",       # malformed
+        "tests/test_x.py::test_a",            # valid
+    ]
+    assert validate_test_ids(ids) == [
+        "tests/test_x.py::test_y[1]",
+        "tests/test_x.py::test_a",
+    ]
+
+
+# ---- MalformedTestIdsError in import_swebench_instance -------------------
+
+def test_import_raises_when_all_f2p_malformed(tmp_path):
+    """A task whose fail_to_pass has no valid test IDs is ungradeable."""
+    rec = SWEbenchRecord(
+        instance_id="bad__x-1",
+        repo="bad/x",
+        base_commit="abc",
+        prompt="p", test_patch="",
+        fail_to_pass=["tests/test_x.py::test_y[ceci"],
+        pass_to_pass=["tests/test_x.py::test_z[1]"],
+    )
+    with pytest.raises(MalformedTestIdsError, match="all 1 fail_to_pass"):
+        import_swebench_instance(rec, tasks_dir=tmp_path, fetch_repo=False)
+
+
+def test_import_raises_when_all_p2p_malformed(tmp_path):
+    rec = SWEbenchRecord(
+        instance_id="bad__x-1",
+        repo="bad/x",
+        base_commit="abc",
+        prompt="p", test_patch="",
+        fail_to_pass=["tests/test_x.py::test_y[1]"],
+        pass_to_pass=["tests/test_x.py::test_z[ceci"],
+    )
+    with pytest.raises(MalformedTestIdsError, match="all 1 pass_to_pass"):
+        import_swebench_instance(rec, tasks_dir=tmp_path, fetch_repo=False)
+
+
+def test_import_keeps_good_ids_and_drops_bad_ones(tmp_path):
+    rec = SWEbenchRecord(
+        instance_id="mixed__x-1",
+        repo="mixed/x",
+        base_commit="abc",
+        prompt="p", test_patch="",
+        # mix of valid and invalid
+        fail_to_pass=["tests/test_x.py::test_y[1]", "tests/test_x.py::test_z[ceci"],
+        pass_to_pass=["tests/test_x.py::test_w"],
+    )
+    import_swebench_instance(rec, tasks_dir=tmp_path, fetch_repo=False)
+    data = json.loads((tmp_path / "mixed__x-1" / "task.json").read_text())
+    # bad IDs filtered out
+    assert data["fail_to_pass"] == ["tests/test_x.py::test_y[1]"]
+    assert data["pass_to_pass"] == ["tests/test_x.py::test_w"]
 

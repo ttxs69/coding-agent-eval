@@ -204,11 +204,30 @@ def run(
                     else:
                         shutil.copy2(child, dest)
 
+    # Capture agent identity (version + model) early so every result row
+    # records it — including the early-exit TASK_ERROR paths. Without this,
+    # the leaderboard groups pre-flight failures as a separate "(unknown)"
+    # row and hides the real per-agent pass rate.
+    adapter = get_adapter(agent_name)
+    try:
+        agent_version = adapter.version()
+    except Exception:
+        agent_version = "unknown"
+    try:
+        # Prefer the adapter's _discover_model() (it reads config files
+        # reliably); fall back to default_model for adapters that don't
+        # define it (e.g. the mock adapter).
+        discover = getattr(adapter, "_discover_model", None)
+        agent_model = discover() if discover else getattr(adapter, "default_model", None)
+    except Exception:
+        agent_model = getattr(adapter, "default_model", None)
+
     _ensure_git_repo(workdir)
     if not _apply_test_patch(workdir, task_dir):
-        return _result(task, agent_name, mode, Status.TASK_ERROR, "unknown", {}, {}, "", str(workdir),
+        return _result(task, agent_name, mode, Status.TASK_ERROR, agent_version, {}, {}, "", str(workdir),
                        f"could not apply tests.patch — workdir is empty (use --fetch-fresh or "
-                       f"run without --no-fetch-repo). Patch: {task_dir / 'tests.patch'}")
+                       f"run without --no-fetch-repo). Patch: {task_dir / 'tests.patch'}",
+                       agent_model=agent_model)
 
     # Pick a subprocess runner: local (default) or docker (one container, multiple execs).
     # In docker mode, start ONE container and exec into it for each step so state
@@ -236,8 +255,8 @@ def run(
     if task.get("setup_cmd"):
         setup_rc, _, setup_err, _ = run_step(task["setup_cmd"], workdir, timeout=timeout_sec)
         if setup_rc != 0:
-            return _result(task, agent_name, mode, Status.TASK_ERROR, "unknown", {}, {}, "", str(workdir),
-                           f"setup_cmd failed: {setup_err[:200]}")
+            return _result(task, agent_name, mode, Status.TASK_ERROR, agent_version, {}, {}, "", str(workdir),
+                           f"setup_cmd failed: {setup_err[:200]}", agent_model=agent_model)
 
     # 6: Pre-flight
     pre = _run_tests(task["test_cmd"], workdir, timeout=timeout_sec, run_subprocess=run_step)
@@ -247,27 +266,41 @@ def run(
     pre_fails_correctly = all(pre_flight["fail_to_pass"][n] != "passed" for n in fail_to_pass)
     pre_passes_correctly = all(pre_flight["pass_to_pass"][n] == "passed" for n in pass_to_pass)
     if not (pre_fails_correctly and pre_passes_correctly):
-        return _result(task, agent_name, mode, Status.TASK_ERROR, "unknown", pre_flight, pre_flight, "",
-                       str(workdir), "pre-flight validation failed: fail_to_pass tests do not all fail, "
-                       "or pass_to_pass tests do not all pass")
+        # Diagnose: which tests are we missing? Tests not in pytest's output
+        # are typically SWE-bench data quality issues (truncated test IDs in
+        # PASS_TO_PASS) — surfacing them helps the user tell apart "the
+        # task is broken" from "the dataset is broken".
+        missing_f2p = [n for n in fail_to_pass if pre.get(n) is None]
+        missing_p2p = [n for n in pass_to_pass if pre.get(n) is None]
+        failed_p2p = [n for n in pass_to_pass if pre.get(n) is not None and pre.get(n) != TestStatus.PASSED]
+        passed_f2p = [n for n in fail_to_pass if pre.get(n) == TestStatus.PASSED]
+        details = []
+        if missing_f2p:
+            details.append(f"{len(missing_f2p)} fail_to_pass tests not in pytest output (likely SWE-bench data issue)")
+        if missing_p2p:
+            details.append(f"{len(missing_p2p)} pass_to_pass tests not in pytest output (likely SWE-bench data issue)")
+        if failed_p2p:
+            details.append(f"{len(failed_p2p)} pass_to_pass tests failed (real regression)")
+        if passed_f2p:
+            details.append(f"{len(passed_f2p)} fail_to_pass tests passed (task already fixed?)")
+        msg = "pre-flight validation failed: " + "; ".join(details) if details else "pre-flight validation failed"
+        return _result(task, agent_name, mode, Status.TASK_ERROR, agent_version, pre_flight, pre_flight, "",
+                       str(workdir), msg, agent_model=agent_model)
 
     # 7: Run agent
-    adapter = get_adapter(agent_name)
     if not adapter.is_available():
-        return _result(task, agent_name, mode, Status.AGENT_ERROR, "unknown", pre_flight, pre_flight, "",
-                       str(workdir), f"agent {agent_name} not available")
-    agent_version = adapter.version()
+        return _result(task, agent_name, mode, Status.AGENT_ERROR, agent_version, pre_flight, pre_flight, "",
+                       str(workdir), f"agent {agent_name} not available", agent_model=agent_model)
     cmd = adapter.build_command(workdir, task["prompt"], model=None)
     agent_rc, agent_stdout, agent_stderr, duration = run_step(cmd, workdir, timeout=timeout_sec)
     if agent_rc == -1:
         return _result(task, agent_name, mode, Status.TIMEOUT, agent_version, pre_flight, pre_flight, "",
-                       str(workdir), f"agent timed out after {timeout_sec}s",
-                       agent_model=adapter._discover_model())
+                       str(workdir), f"agent timed out after {timeout_sec}s", agent_model=agent_model)
     parsed = adapter.parse_output(agent_stdout, agent_stderr, agent_rc)
     if parsed.exit_code != 0:
         return _result(task, agent_name, mode, Status.AGENT_ERROR, agent_version, pre_flight, pre_flight, "",
                        str(workdir), f"agent exited non-zero: {parsed.exit_code}",
-                       agent_model=parsed.usage.model or adapter._discover_model())
+                       agent_model=parsed.usage.model or agent_model)
 
     # 8: Capture patch
     diff_proc = subprocess.run(["git", "diff"], cwd=workdir, capture_output=True, text=True)
@@ -290,7 +323,7 @@ def run(
         shutil.rmtree(workdir, ignore_errors=True)
 
     return _result(task, agent_name, mode, status, agent_version, pre_flight, post_flight, patch,
-                   str(workdir), "", agent_model=parsed.usage.model,
+                   str(workdir), "", agent_model=parsed.usage.model or agent_model,
                    agent_duration=duration, agent_usage=parsed.usage, repeat=repeat, repeat_index=repeat_index)
 
 

@@ -83,6 +83,35 @@ def _narrow_test_cmd(test_cmd: str, test_ids: list[str]) -> str:
     return f"{head}pytest -vs {' '.join(files)}"
 
 
+# Valid pytest node ID: path/to/file.py::test_name, optionally with
+# `::Class::` and/or `[parametrized-id]`. Used by `validate_test_ids` to
+# filter out SWE-bench instances whose FAIL_TO_PASS / PASS_TO_PASS contain
+# malformed test IDs (the dataset has some — see the [ceci / [sin(/[0.1
+# truncation pattern in astropy tasks).
+_VALID_NODE_ID = re.compile(
+    r"^[\w/.\-]+\.py::(?:\w+::)?\w+(?:\[[^\]\n]+\])?$"
+)
+
+
+def validate_test_ids(test_ids: list[str]) -> list[str]:
+    """Return the subset of `test_ids` that look like well-formed pytest
+    node IDs (i.e. would plausibly appear in pytest's output).
+
+    SWE-bench Verified has a handful of instances where the upstream
+    FAIL_TO_PASS / PASS_TO_PASS lists contain truncated test IDs (e.g.
+    `test_x[ceci` with a missing closing bracket, or `test_y[sin(` with
+    an unclosed paren). pytest never emits such IDs, so pre-flight will
+    always fail for those tasks. Filtering them out at import time avoids
+    burning compute on tasks that cannot be graded.
+    """
+    return [t for t in test_ids if _VALID_NODE_ID.match(t)]
+
+
+class MalformedTestIdsError(ValueError):
+    """Raised when a SWE-bench record's FAIL_TO_PASS / PASS_TO_PASS has so many
+    malformed test IDs that grading the task would be impossible."""
+
+
 def default_fetcher(repo: str, base_commit: str, dest: Path) -> None:
     """Clone the repo at base_commit into dest. Requires `git` on PATH.
 
@@ -105,7 +134,32 @@ def import_swebench_instance(
     split: str = "verified",
     fetcher: Fetcher | None = None,
 ) -> Path:
-    """Write one task under tasks_dir. Returns the task directory path."""
+    """Write one task under tasks_dir. Returns the task directory path.
+
+    Raises MalformedTestIdsError if the record's FAIL_TO_PASS or PASS_TO_PASS
+    has so many malformed test IDs that pre-flight validation can never pass.
+    Callers (e.g. `cae add-task`) can catch this and skip the instance.
+    """
+    # Validate the test ID lists up front so the user gets a clean error
+    # rather than a task_error at eval time. Tasks where EVERY test ID is
+    # malformed can't be graded; reject those outright. Tasks where SOME
+    # IDs are malformed still produce useful signal — we keep the good IDs
+    # and drop the bad ones, then warn.
+    good_f2p = validate_test_ids(record.fail_to_pass)
+    good_p2p = validate_test_ids(record.pass_to_pass)
+    bad_f2p = [t for t in record.fail_to_pass if t not in good_f2p]
+    bad_p2p = [t for t in record.pass_to_pass if t not in good_p2p]
+    if record.fail_to_pass and not good_f2p:
+        raise MalformedTestIdsError(
+            f"{record.instance_id}: all {len(record.fail_to_pass)} fail_to_pass "
+            f"test IDs are malformed (sample: {bad_f2p[0]!r}). Cannot grade this task."
+        )
+    if record.pass_to_pass and not good_p2p:
+        raise MalformedTestIdsError(
+            f"{record.instance_id}: all {len(record.pass_to_pass)} pass_to_pass "
+            f"test IDs are malformed (sample: {bad_p2p[0]!r}). Cannot grade this task."
+        )
+
     task_dir = Path(tasks_dir) / record.instance_id
     task_dir.mkdir(parents=True, exist_ok=True)
 
@@ -118,7 +172,7 @@ def import_swebench_instance(
     # the test files referenced by fail_to_pass/pass_to_pass so we don't
     # collect (and fail) unrelated tests in the same repo.
     test_cmd = defaults["test_cmd"].replace(" -x", " ")
-    test_cmd = _narrow_test_cmd(test_cmd, record.fail_to_pass + record.pass_to_pass)
+    test_cmd = _narrow_test_cmd(test_cmd, good_f2p + good_p2p)
 
     task_json = {
         "instance_id": record.instance_id,
@@ -127,8 +181,8 @@ def import_swebench_instance(
         "prompt": record.prompt,
         "setup_cmd": defaults["setup_cmd"],
         "test_cmd": test_cmd,
-        "fail_to_pass": record.fail_to_pass,
-        "pass_to_pass": record.pass_to_pass,
+        "fail_to_pass": good_f2p,
+        "pass_to_pass": good_p2p,
         "source": {
             "kind": "swe-bench",
             "split": split,

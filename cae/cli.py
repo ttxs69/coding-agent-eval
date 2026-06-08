@@ -62,19 +62,34 @@ def cmd_add_task(args: argparse.Namespace) -> int:
     if not args.from_swebench:
         print("error: only --from-swebench is supported in v1", file=sys.stderr)
         return 2
-    from cae.importer import import_swebench_instance, load_swebench_records
+    from cae.importer import (
+        import_swebench_instance,
+        load_swebench_records,
+        MalformedTestIdsError,
+    )
     records = list(load_swebench_records(
         instance_ids=args.instance_id or None,
         split=args.split,
         limit=args.limit,
         dataset_path=args.dataset_path,
     ))
+    n_imported = 0
+    n_skipped = 0
     for rec in records:
-        import_swebench_instance(
-            rec, tasks_dir=Path(args.tasks_dir),
-            fetch_repo=not args.no_fetch_repo, split=args.split,
-        )
+        try:
+            import_swebench_instance(
+                rec, tasks_dir=Path(args.tasks_dir),
+                fetch_repo=not args.no_fetch_repo, split=args.split,
+            )
+        except MalformedTestIdsError as e:
+            print(f"skipped {rec.instance_id}: {e}", file=sys.stderr)
+            n_skipped += 1
+            continue
         print(f"imported {rec.instance_id}")
+        n_imported += 1
+    if n_skipped:
+        print(f"imported {n_imported}, skipped {n_skipped} (malformed test IDs in SWE-bench data)",
+              file=sys.stderr)
     return 0
 
 
@@ -142,7 +157,7 @@ def cmd_report(args: argparse.Namespace) -> int:
     from cae.render_table import render_table
     rows = aggregate_results(Path(args.results_dir))
     if args.format == "table":
-        headers = ["AGENT", "MODEL", "PASS RATE", "N", "MEDIAN COST", "MEDIAN DUR (s)", "LAST RUN"]
+        headers = ["AGENT", "MODEL", "PASS RATE", "N", "SKIPPED", "MEDIAN COST", "MEDIAN DUR (s)", "LAST RUN"]
         def fmt_cost(v):
             return f"${v:.2f}" if v is not None else "$?"
         def fmt_dur(v):
@@ -150,6 +165,7 @@ def cmd_report(args: argparse.Namespace) -> int:
         out_rows = [
             [r["agent"], str(r["model"] or ""),
              f"{r['pass_rate']*100:.0f}%", str(r["n_attempted"]),
+             str(r.get("n_skipped_harness", 0)),
              fmt_cost(r["median_cost_usd"]), fmt_dur(r["median_duration_sec"]),
              r["last_run"]]
             for r in rows
