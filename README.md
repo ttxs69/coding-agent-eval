@@ -4,6 +4,22 @@ Public, reproducible benchmark for CLI coding agents. Compare Claude Code, Codex
 
 **Live leaderboard:** [ttxs69.github.io/coding-agent-eval](https://ttxs69.github.io/coding-agent-eval/)
 
+## What is `cae`?
+
+`cae` is the CLI for the benchmark. It has five subcommands:
+
+| Command | What it does |
+|---|---|
+| `cae list-agents` | Show registered agent adapters and whether each is installed. |
+| `cae run` | Run one (task, agent) pair through the harness end-to-end. |
+| `cae add-task` | Import a task from SWE-bench (or write one by hand). |
+| `cae report` | Aggregate `results/*.json` into a console table. |
+| `cae build-site` | Render the static leaderboard site from `results/`. |
+
+`cae run` is the workhorse. It takes `--agent <name>` (a registered adapter) and a task, then runs the full lifecycle: prep workdir, apply test patch, run setup, pre-flight, run the agent, capture the patch, grade, write the result. Adding a new agent is a single file under `cae/agents/` that implements the `AgentAdapter` protocol — see `cae/agents/claude_code.py` as a template.
+
+The `scripts/run_eval.sh` wrapper just loops `cae run` over a list of tasks and agents so you don't have to type the loop by hand.
+
 ## Quickstart
 
 Requires [uv](https://docs.astral.sh/uv/).
@@ -43,14 +59,16 @@ The result is written to `/tmp/cae/<run_id>.json`. The harness skips any (task, 
 ## Run a full eval
 
 ```
-sh scripts/run_eval.sh           # all tasks in tasks/
-sh scripts/run_eval.sh 1         # first task only (cheap e2e test)
-sh scripts/run_eval.sh 4         # first 4 tasks
-sh scripts/run_eval.sh --small   # alias for 4
-sh scripts/run_eval.sh --help    # show usage
+sh scripts/run_eval.sh                              # all tasks, auto-detect agents
+sh scripts/run_eval.sh 1                            # 1 task, auto-detect
+sh scripts/run_eval.sh 4                            # first 4 tasks, auto-detect
+sh scripts/run_eval.sh 1 claude-code                # 1 task, specific agent
+sh scripts/run_eval.sh 4 claude-code,codex          # 4 tasks, comma-separated list
+sh scripts/run_eval.sh --small                      # alias for 4
+sh scripts/run_eval.sh --help                       # show usage
 ```
 
-Tasks are picked in alphabetical order. The script runs every selected task × {claude-code, codex}, logs to `results/eval.log`, and prints an aggregated report at the end.
+The script picks tasks alphabetically and auto-detects agents via `cae list-agents` (excluding the `mock` test adapter). Override with a comma-separated agent list. Each (task, agent) pair is one `cae run` invocation; results land in `results/eval.log` and per-run JSONs land in `results/`.
 
 ## Build the leaderboard site
 
@@ -71,7 +89,7 @@ uv run ruff check cae tests
 
 - Tasks live under `tasks/<instance_id>/{task.json, repo/, tests.patch}`.
 - The harness runs the agent in a workdir, captures `git diff` as the patch, then grades by re-running the test_cmd.
-- Tokens and cost come from each agent's own output (no token math in the harness).
+- Tokens and cost come from each agent's own output (no token math in the harness). Prompt-cache tokens are tracked separately so the leaderboard can show cache hit rate.
 - The leaderboard aggregates `results/*.json` and filters out harness-level failures (task_error, grader_error) from the pass rate.
 
 ## Status

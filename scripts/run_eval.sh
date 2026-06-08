@@ -1,11 +1,18 @@
 #!/bin/sh
-# Run the eval: tasks in tasks/ x {claude-code, codex}, in local mode.
+# Run the eval: tasks in tasks/ x {agents}, in local mode.
 #
 # Usage:
-#   sh scripts/run_eval.sh           # all tasks
-#   sh scripts/run_eval.sh 1         # first task only (cheap e2e test)
-#   sh scripts/run_eval.sh 4         # first 4 tasks
-#   sh scripts/run_eval.sh --small   # alias for 4
+#   sh scripts/run_eval.sh                              # all tasks, all available agents
+#   sh scripts/run_eval.sh 1                            # 1 task, all available agents
+#   sh scripts/run_eval.sh 4                            # first 4 tasks, all available agents
+#   sh scripts/run_eval.sh 1 claude-code                # 1 task, one specific agent
+#   sh scripts/run_eval.sh 4 claude-code,codex          # 4 tasks, comma-separated list
+#   sh scripts/run_eval.sh --small                      # alias for 4
+#   sh scripts/run_eval.sh --help                       # show usage
+#
+# Agent selection: by default, the script auto-detects all installed
+# non-mock agents via `cae list-agents`. Pass a comma-separated list
+# to override. The mock adapter is always excluded (test-only).
 #
 # The harness skips any (task, agent) pair whose result JSON already exists,
 # so this is safe to re-run after an interruption. Use --force on the cae
@@ -37,7 +44,6 @@ log() {
 }
 
 # Discover tasks from the tasks/ dir (each subdir is one instance), sorted.
-# Capture into a positional-parameter list so we don't need bash arrays.
 TASKS_ALL=""
 for d in tasks/*/; do
   [ -d "$d" ] || continue
@@ -45,7 +51,7 @@ for d in tasks/*/; do
 done
 TOTAL_TASKS=$(echo $TASKS_ALL | wc -w | tr -d ' ')
 
-# Argument parsing: optional count (or --small).
+# First arg: task count (or --small / --help).
 LIMIT=""
 case "${1:-}" in
   "")
@@ -55,7 +61,7 @@ case "${1:-}" in
     LIMIT=4
     ;;
   -h|--help)
-    sed -n '2,15p' "$0"
+    sed -n '2,22p' "$0"
     exit 0
     ;;
   --*)
@@ -76,6 +82,36 @@ if [ "$LIMIT" -gt "$TOTAL_TASKS" ]; then
   LIMIT=$TOTAL_TASKS
 fi
 
+# Second arg: comma-separated agent list. Default: auto-detect.
+AGENTS_ARG="${2:-}"
+if [ -z "$AGENTS_ARG" ]; then
+  # `cae list-agents` prints:
+  #   NAME                 AVAILABLE
+  #   mock                 True
+  #   claude-code          True
+  #   ...
+  # We want every non-mock agent whose AVAILABLE column is True.
+  AGENTS=$(uv run cae list-agents 2>/dev/null | awk '
+    NR > 1 && $1 != "mock" && $2 == "True" {print $1}
+  ')
+  if [ -z "$AGENTS" ]; then
+    echo "error: no agents available. Run 'cae list-agents' to debug." >&2
+    exit 1
+  fi
+  log "Auto-detected agents: $AGENTS"
+else
+  AGENTS=$(echo "$AGENTS_ARG" | tr ',' ' ' | tr -s ' ')
+  # Validate each agent exists in the registry. We don't enforce
+  # availability here — a missing CLI binary will surface as agent_error
+  # in the result, which is the right diagnostic.
+  for a in $AGENTS; do
+    if ! uv run cae list-agents 2>/dev/null | awk -v a="$a" 'NR>1 && $1==a {found=1} END{exit !found}'; then
+      echo "error: unknown agent '$a'. Run 'cae list-agents' to see available." >&2
+      exit 2
+    fi
+  done
+fi
+
 # Take the first $LIMIT tasks (alphabetical order, same as `ls`).
 N=0
 TASKS=""
@@ -89,13 +125,15 @@ done
 TASKS=${TASKS# }  # strip leading space
 
 N_TASKS=$(echo $TASKS | wc -w | tr -d ' ')
-N_AGENTS=2
-log "Starting eval: $N_TASKS task(s) x $N_AGENTS agents = $((N_TASKS * N_AGENTS)) runs"
+N_AGENTS=$(echo $AGENTS | wc -w | tr -d ' ')
+log "Starting eval: $N_TASKS task(s) x $N_AGENTS agent(s) = $((N_TASKS * N_AGENTS)) runs"
 log "Tasks: $TASKS"
+log "Agents: $AGENTS"
 
-# Run all claude-code first, then all codex. Two-agent ordering means we
-# see one agent's cost roll up before the next agent starts (easier to read).
-for agent in claude-code codex; do
+# Run all tasks for the first agent, then all tasks for the second agent,
+# etc. Two-agent (or N-agent) ordering means we see one agent's cost
+# roll up before the next agent starts.
+for agent in $AGENTS; do
   for task in $TASKS; do
     log "RUN start: $agent / $task"
     uv run cae run \
