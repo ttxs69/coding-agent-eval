@@ -6,7 +6,11 @@ build-backend = "setuptools.build_meta"
 name = "coding-agent-eval"
 version = "0.1.0"
 description = "Public benchmark for CLI coding agents (Claude Code, Codex, Aider) on SWE-bench Verified."
-requires-python = ">=3.11"
+# Pinned to 3.10: this is the latest Python that builds the old astropy
+# repos in SWE-bench Verified (3.11+ breaks the Cython-generated C API in
+# the wcslib wrappers). The StrEnum backport in cae/agents/base.py makes
+# 3.9 also viable; 3.10 is the widest safe range.
+requires-python = ">=3.10,<3.11"
 dependencies = [
     "datasets>=2.14",
 ]
@@ -15,6 +19,17 @@ dependencies = [
 dev = [
     "pytest>=7.4",
     "ruff>=0.1",
+]
+# Pinned toolchain for building the old astropy C extensions that come
+# with SWE-bench Verified tasks. Without these, `pip install -e .[test]`
+# inside the workdir fails on modern setuptools (the wcslib wrappers
+# import `setuptools.dep_util`, which was removed in setuptools 60).
+astropy-build = [
+    "setuptools<60",
+    "setuptools_scm<8",
+    "extension-helpers<1",
+    "cython<3",
+    "pyerfa",
 ]
 
 [project.scripts]
@@ -30,9 +45,14 @@ norecursedirs = ["tests/fixtures"]
 
 [tool.ruff]
 line-length = 100
-target-version = "py311"
+target-version = "py310"
 
 [tool.pyright]
 include = ["cae", "tests"]
-pythonVersion = "3.11"
+pythonVersion = "3.10"
 venv = ".venv"
+
+[tool.uv]
+# Pin the Python interpreter uv picks. 3.10 is the latest version that
+# builds old astropy's C extensions cleanly (see requires-python above).
+required-version = ">=0.4.0"

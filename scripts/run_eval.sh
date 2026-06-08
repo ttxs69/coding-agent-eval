@@ -15,10 +15,13 @@
 # with timestamps so you can tail -f to follow progress.
 #
 # Written for POSIX sh (not bash) so it works regardless of which shell
-# the harness invokes.
+# the harness invokes. Uses `uv run` so the venv's cae/pytest is on PATH
+# without needing a manual `source .venv/bin/activate`.
 set -u
 cd "$(dirname "$0")/.."
-. .venv/bin/activate
+
+# Make sure deps are installed (idempotent; no-op if already synced).
+uv sync --extra dev --extra astropy-build >/dev/null 2>&1
 
 # CFLAGS for old astropy's Cython-generated C: -Wincompatible-function-pointer-types
 # was promoted to an error by newer Clang, but the old wcslib wrappers trigger it
@@ -95,7 +98,7 @@ log "Tasks: $TASKS"
 for agent in claude-code codex; do
   for task in $TASKS; do
     log "RUN start: $agent / $task"
-    cae run \
+    uv run cae run \
         --agent "$agent" \
         --task "$task" \
         --tasks-dir tasks \
@@ -108,4 +111,4 @@ for agent in claude-code codex; do
 done
 
 log "All runs complete"
-cae report --results-dir results --format table | tee -a "$LOG"
+uv run cae report --results-dir results --format table | tee -a "$LOG"

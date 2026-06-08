@@ -6,25 +6,27 @@ Public, reproducible benchmark for CLI coding agents. Compare Claude Code, Codex
 
 ## Quickstart
 
+Requires [uv](https://docs.astral.sh/uv/).
+
 ```
-pip install -e ".[dev]"
-cae --help
+uv sync --extra dev --extra astropy-build
+uv run cae --help
 ```
 
-**Note:** SWE-bench tasks from older repos (e.g. astropy) may need Python 3.10 and CFLAGS set — see "Environment" below.
+Python 3.10 is pinned in `pyproject.toml` because some SWE-bench tasks (notably older astropy) have C extension code that won't build on 3.11+. uv will install 3.10 automatically.
 
 ## Add tasks
 
 From SWE-bench Verified:
 
 ```
-cae add-task --from-swebench --limit 50
+uv run cae add-task --from-swebench --limit 50
 ```
 
 The split defaults to `test` (the only split in the dataset). To pull specific instances:
 
 ```
-cae add-task --from-swebench --instance-id django__django-12345
+uv run cae add-task --from-swebench --instance-id django__django-12345
 ```
 
 Tasks with malformed test IDs (a known SWE-bench data quality issue) are skipped automatically with a warning.
@@ -32,8 +34,8 @@ Tasks with malformed test IDs (a known SWE-bench data quality issue) are skipped
 ## Run a task
 
 ```
-cae list-agents
-cae run --agent mock --task tiny_task --tasks-dir tests/fixtures --results-dir /tmp/cae
+uv run cae list-agents
+uv run cae run --agent mock --task tiny_task --tasks-dir tests/fixtures --results-dir /tmp/cae
 ```
 
 The result is written to `/tmp/cae/<run_id>.json`. The harness skips any (task, agent) pair that already has a result — re-run the same command to resume after an interruption. Use `--force` to overwrite.
@@ -53,28 +55,24 @@ Tasks are picked in alphabetical order. The script runs every selected task × {
 ## Build the leaderboard site
 
 ```
-cae build-site --results-dir results --out-dir site
+uv run cae build-site --results-dir results --out-dir site
 ```
 
-Deploy `site/` to GitHub Pages (or run `cae build-site --publish` to push via the `gh` CLI). The published leaderboard lives at [ttxs69.github.io/coding-agent-eval](https://ttxs69.github.io/coding-agent-eval/).
-
-## Environment
-
-Some SWE-bench tasks (notably older astropy) have C extension code incompatible with Python 3.11+ and newer Clang. If setup_cmd fails with C compiler errors:
-
-```
-uv python install 3.10
-uv venv .venv --python 3.10
-.venv/bin/pip install --ignore-requires-python -e ".[dev]"
-export CFLAGS="-Wno-incompatible-function-pointer-types -Wno-error=incompatible-function-pointer-types -Wno-implicit-function-declaration"
-```
+Deploy `site/` to GitHub Pages (or run `uv run cae build-site --publish` to push via the `gh` CLI). The published leaderboard lives at [ttxs69.github.io/coding-agent-eval](https://ttxs69.github.io/coding-agent-eval/).
 
 ## Development
 
 ```
-pytest -v
-ruff check cae tests
+uv run pytest -v
+uv run ruff check cae tests
 ```
+
+## How it works
+
+- Tasks live under `tasks/<instance_id>/{task.json, repo/, tests.patch}`.
+- The harness runs the agent in a workdir, captures `git diff` as the patch, then grades by re-running the test_cmd.
+- Tokens and cost come from each agent's own output (no token math in the harness).
+- The leaderboard aggregates `results/*.json` and filters out harness-level failures (task_error, grader_error) from the pass rate.
 
 ## Status
 
