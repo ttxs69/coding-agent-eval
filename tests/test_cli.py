@@ -111,6 +111,7 @@ def test_cae_run_with_keep_workdir(tmp_path, tiny_task_path):
     tasks = proj / "tasks" / "tiny_task"
     tasks.mkdir(parents=True)
     (tasks / "task.json").write_text((tiny_task_path / "task.json").read_text())
+    (tasks / "repo").mkdir(parents=True)
     for child in (tiny_task_path / "repo").iterdir():
         dest = tasks / "repo" / child.name
         if child.is_dir():
@@ -138,6 +139,7 @@ def test_cae_run_force_flag_resumes(tmp_path, tiny_task_path):
     tasks = proj / "tasks" / "tiny_task"
     tasks.mkdir(parents=True)
     (tasks / "task.json").write_text((tiny_task_path / "task.json").read_text())
+    (tasks / "repo").mkdir(parents=True)
     for child in (tiny_task_path / "repo").iterdir():
         dest = tasks / "repo" / child.name
         if child.is_dir():
