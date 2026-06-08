@@ -2,6 +2,8 @@
 
 Public, reproducible benchmark for CLI coding agents. Compare Claude Code, Codex, Aider, and more on the same set of real-world tasks.
 
+**Live leaderboard:** [ttxs69.github.io/coding-agent-eval](https://ttxs69.github.io/coding-agent-eval/)
+
 ## Quickstart
 
 ```
@@ -54,7 +56,7 @@ Tasks are picked in alphabetical order. The script runs every selected task × {
 cae build-site --results-dir results --out-dir site
 ```
 
-Deploy `site/` to GitHub Pages (or run `cae build-site --publish` to push via the `gh` CLI).
+Deploy `site/` to GitHub Pages (or run `cae build-site --publish` to push via the `gh` CLI). The published leaderboard lives at [ttxs69.github.io/coding-agent-eval](https://ttxs69.github.io/coding-agent-eval/).
 
 ## Environment
 
