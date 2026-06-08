@@ -7,9 +7,9 @@ pre{background:#f5f5f5;padding:1em;overflow-x:auto}
 <h1>astropy__astropy-12907</h1>
 <details>
 <summary><strong>claude-code</strong> — resolved</summary>
-<p>Model: <code>MiniMax-M3</code> &middot;
-   Duration: 310s &middot;
-   Cost: $1.84</p>
+<p>Model: <code>glm-5.1</code> &middot;
+   Duration: 166s &middot;
+   Cost: $0.54</p>
 <pre><code>diff --git a/astropy/modeling/separable.py b/astropy/modeling/separable.py
 index a308e27..45bea36 100644
 --- a/astropy/modeling/separable.py
@@ -24,7 +24,7 @@ index a308e27..45bea36 100644
      return np.hstack([cleft, cright])
  
 diff --git a/astropy/modeling/tests/test_separable.py b/astropy/modeling/tests/test_separable.py
-index 8dfe5c8..ce3d94e 100644
+index 8dfe5c8..024b239 100644
 --- a/astropy/modeling/tests/test_separable.py
 +++ b/astropy/modeling/tests/test_separable.py
 @@ -28,6 +28,13 @@ p22 = models.Polynomial2D(2, name=&#x27;p22&#x27;)
@@ -60,34 +60,11 @@ index 8dfe5c8..ce3d94e 100644
  }
  
  
-@@ -148,3 +165,22 @@ def test_custom_model_separable():
- 
-     assert not model_c().separable
-     assert np.all(separability_matrix(model_c()) == [True, True])
-+
-+
-+def test_nested_compound_model_right_separable():
-+    # Regression test: separability_matrix should give the same result
-+    # for nested and flat compound models with the &#x27;&amp;&#x27; operator.
-+    # The bug was in _cstack: when the right operand was already a
-+    # separability matrix, it was overwritten with all 1s, losing the
-+    # nested structure.
-+    cm = models.Linear1D(10) &amp; models.Linear1D(5)
-+
-+    flat = models.Pix2Sky_TAN() &amp; models.Linear1D(10) &amp; models.Linear1D(5)
-+    nested = models.Pix2Sky_TAN() &amp; cm
-+
-+    expected = np.array([[True,  True, False, False],
-+                         [True,  True, False, False],
-+                         [False, False, True,  False],
-+                         [False, False, False, True]])
-+    assert_allclose(separability_matrix(flat), expected)
-+    assert_allclose(separability_matrix(nested), expected)
 </code></pre>
 </details><details>
 <summary><strong>codex</strong> — resolved</summary>
 <p>Model: <code>MiniMax-M3</code> &middot;
-   Duration: 172s &middot;
+   Duration: 245s &middot;
    Cost: $?</p>
 <pre><code>diff --git a/astropy/modeling/separable.py b/astropy/modeling/separable.py
 index a308e27..45bea36 100644

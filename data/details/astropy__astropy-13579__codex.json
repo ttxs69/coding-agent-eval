@@ -1,14 +1,14 @@
 {
-  "run_id": "2026-06-08T04-04-05__codex__astropy__astropy-13579",
+  "run_id": "2026-06-08T05-47-13__codex__astropy__astropy-13579",
   "task_id": "astropy__astropy-13579",
   "agent": "codex",
   "agent_version": "codex-cli 0.137.0",
   "model": "MiniMax-M3",
   "mode": "local",
   "status": "failed",
-  "started_at": "2026-06-08T04:04:05Z",
-  "duration_sec": 391.29836799995974,
-  "harness_git_sha": "dbbc436",
+  "started_at": "2026-06-08T05:47:13Z",
+  "duration_sec": 414.4909974159673,
+  "harness_git_sha": "8fdca78",
   "task_source": {
     "kind": "swe-bench",
     "split": "test",
@@ -16,8 +16,8 @@
     "swe_bench_commit": "c104f840cc67f8b6eec6f759ebc8b2693d585d4a"
   },
   "usage": {
-    "tokens_in": 1127725,
-    "tokens_out": 20094,
+    "tokens_in": 1039277,
+    "tokens_out": 21031,
     "cost_usd": null,
     "billing_mode": "api"
   },
@@ -71,23 +71,23 @@
     },
     "post_flight": {
       "fail_to_pass": {
-        "astropy/wcs/wcsapi/wrappers/tests/test_sliced_wcs.py::test_coupled_world_slicing": "failed"
+        "astropy/wcs/wcsapi/wrappers/tests/test_sliced_wcs.py::test_coupled_world_slicing": "passed"
       },
       "pass_to_pass": {
         "astropy/wcs/wcsapi/wrappers/tests/test_sliced_wcs.py::test_invalid_slices": "passed",
         "astropy/wcs/wcsapi/wrappers/tests/test_sliced_wcs.py::test_sanitize_slice[item0-4-expected0]": "passed",
         "astropy/wcs/wcsapi/wrappers/tests/test_sliced_wcs.py::test_sanitize_slice[item1-5-expected1]": "passed",
         "astropy/wcs/wcsapi/wrappers/tests/test_sliced_wcs.py::test_sanitize_slice[item2-10-expected2]": "passed",
-        "astropy/wcs/wcsapi/wrappers/tests/test_sliced_wcs.py::test_ellipsis": "passed",
+        "astropy/wcs/wcsapi/wrappers/tests/test_sliced_wcs.py::test_ellipsis": "failed",
         "astropy/wcs/wcsapi/wrappers/tests/test_sliced_wcs.py::test_pixel_to_world_broadcasting": "passed",
-        "astropy/wcs/wcsapi/wrappers/tests/test_sliced_wcs.py::test_world_to_pixel_broadcasting": "passed",
+        "astropy/wcs/wcsapi/wrappers/tests/test_sliced_wcs.py::test_world_to_pixel_broadcasting": "failed",
         "astropy/wcs/wcsapi/wrappers/tests/test_sliced_wcs.py::test_spectral_slice": "passed",
-        "astropy/wcs/wcsapi/wrappers/tests/test_sliced_wcs.py::test_spectral_range": "passed",
-        "astropy/wcs/wcsapi/wrappers/tests/test_sliced_wcs.py::test_celestial_slice": "passed",
-        "astropy/wcs/wcsapi/wrappers/tests/test_sliced_wcs.py::test_celestial_range": "passed",
-        "astropy/wcs/wcsapi/wrappers/tests/test_sliced_wcs.py::test_celestial_range_rot": "passed",
-        "astropy/wcs/wcsapi/wrappers/tests/test_sliced_wcs.py::test_no_array_shape": "passed",
-        "astropy/wcs/wcsapi/wrappers/tests/test_sliced_wcs.py::test_ellipsis_none_types": "passed",
+        "astropy/wcs/wcsapi/wrappers/tests/test_sliced_wcs.py::test_spectral_range": "failed",
+        "astropy/wcs/wcsapi/wrappers/tests/test_sliced_wcs.py::test_celestial_slice": "failed",
+        "astropy/wcs/wcsapi/wrappers/tests/test_sliced_wcs.py::test_celestial_range": "failed",
+        "astropy/wcs/wcsapi/wrappers/tests/test_sliced_wcs.py::test_celestial_range_rot": "failed",
+        "astropy/wcs/wcsapi/wrappers/tests/test_sliced_wcs.py::test_no_array_shape": "failed",
+        "astropy/wcs/wcsapi/wrappers/tests/test_sliced_wcs.py::test_ellipsis_none_types": "failed",
         "astropy/wcs/wcsapi/wrappers/tests/test_sliced_wcs.py::test_combine_slices[slice10-slice20-expected0]": "passed",
         "astropy/wcs/wcsapi/wrappers/tests/test_sliced_wcs.py::test_combine_slices[slice11-slice21-expected1]": "passed",
         "astropy/wcs/wcsapi/wrappers/tests/test_sliced_wcs.py::test_combine_slices[slice12-slice22-expected2]": "passed",
@@ -117,7 +117,7 @@
       }
     }
   },
-  "patch": "diff --git a/astropy/wcs/wcsapi/wrappers/tests/test_sliced_wcs.py b/astropy/wcs/wcsapi/wrappers/tests/test_sliced_wcs.py\nindex a354114..dcc5359 100644\n--- a/astropy/wcs/wcsapi/wrappers/tests/test_sliced_wcs.py\n+++ b/astropy/wcs/wcsapi/wrappers/tests/test_sliced_wcs.py\n@@ -899,3 +899,39 @@ def test_pixel_to_world_values_different_int_types():\n     for int_coord, np64_coord in zip(int_sliced.pixel_to_world_values(*pixel_arrays),\n                                      np64_sliced.pixel_to_world_values(*pixel_arrays)):\n         assert all(int_coord == np64_coord)\n+\n+\n+COUPLED_WCS_HEADER = {\n+    'WCSAXES': 3,\n+    'CRPIX1': (100 + 1)/2,\n+    'CRPIX2': (25 + 1)/2,\n+    'CRPIX3': 1.0,\n+    'PC1_1': 0.0,\n+    'PC1_2': -1.0,\n+    'PC1_3': 0.0,\n+    'PC2_1': 1.0,\n+    'PC2_2': 0.0,\n+    'PC2_3': -1.0,\n+    'CDELT1': 5,\n+    'CDELT2': 5,\n+    'CDELT3': 0.055,\n+    'CUNIT1': 'arcsec',\n+    'CUNIT2': 'arcsec',\n+    'CUNIT3': 'Angstrom',\n+    'CTYPE1': 'HPLN-TAN',\n+    'CTYPE2': 'HPLT-TAN',\n+    'CTYPE3': 'WAVE',\n+    'CRVAL1': 0.0,\n+    'CRVAL2': 0.0,\n+    'CRVAL3': 1.05,\n+\n+}\n+\n+\n+def test_coupled_world_slicing():\n+    fits_wcs = WCS(header=COUPLED_WCS_HEADER)\n+    sl = SlicedLowLevelWCS(fits_wcs, 0)\n+    world = fits_wcs.pixel_to_world_values(0,0,0)\n+    out_pix = sl.world_to_pixel_values(world[0], world[1])\n+\n+    assert np.allclose(out_pix[0], 0)\n",
-  "workdir": "/var/folders/wd/n_p084lj52xb8hbrg6m9zfdm0000gn/T/cae-g7e2hq5h",
+  "patch": "diff --git a/astropy/wcs/wcsapi/wrappers/sliced_wcs.py b/astropy/wcs/wcsapi/wrappers/sliced_wcs.py\nindex d7605b0..5dbbd69 100644\n--- a/astropy/wcs/wcsapi/wrappers/sliced_wcs.py\n+++ b/astropy/wcs/wcsapi/wrappers/sliced_wcs.py\n@@ -245,13 +245,21 @@ class SlicedLowLevelWCS(BaseWCSWrapper):\n     def world_to_pixel_values(self, *world_arrays):\n         world_arrays = tuple(map(np.asanyarray, world_arrays))\n         world_arrays_new = []\n+        # Use the world coordinates at the slice position for any dropped\n+        # world dimensions. Substituting a constant value is incorrect when\n+        # the dropped dimension is coupled to a kept pixel dimension via a\n+        # non-trivial PC matrix, because the inverse transformation is\n+        # sensitive to the value of the dropped world coordinate.\n+        dropped_values = self.dropped_world_dimensions[\"value\"]\n         iworld_curr = -1\n+        idropped = 0\n         for iworld in range(self._wcs.world_n_dim):\n             if iworld in self._world_keep:\n                 iworld_curr += 1\n                 world_arrays_new.append(world_arrays[iworld_curr])\n             else:\n-                world_arrays_new.append(1.)\n+                world_arrays_new.append(dropped_values[idropped])\n+                idropped += 1\n \n         world_arrays_new = np.broadcast_arrays(*world_arrays_new)\n         pixel_arrays = list(self._wcs.world_to_pixel_values(*world_arrays_new))\ndiff --git a/astropy/wcs/wcsapi/wrappers/tests/test_sliced_wcs.py b/astropy/wcs/wcsapi/wrappers/tests/test_sliced_wcs.py\nindex a354114..dcc5359 100644\n--- a/astropy/wcs/wcsapi/wrappers/tests/test_sliced_wcs.py\n+++ b/astropy/wcs/wcsapi/wrappers/tests/test_sliced_wcs.py\n@@ -899,3 +899,39 @@ def test_pixel_to_world_values_different_int_types():\n     for int_coord, np64_coord in zip(int_sliced.pixel_to_world_values(*pixel_arrays),\n                                      np64_sliced.pixel_to_world_values(*pixel_arrays)):\n         assert all(int_coord == np64_coord)\n+\n+\n+COUPLED_WCS_HEADER = {\n+    'WCSAXES': 3,\n+    'CRPIX1': (100 + 1)/2,\n+    'CRPIX2': (25 + 1)/2,\n+    'CRPIX3': 1.0,\n+    'PC1_1': 0.0,\n+    'PC1_2': -1.0,\n+    'PC1_3': 0.0,\n+    'PC2_1': 1.0,\n+    'PC2_2': 0.0,\n+    'PC2_3': -1.0,\n+    'CDELT1': 5,\n+    'CDELT2': 5,\n+    'CDELT3': 0.055,\n+    'CUNIT1': 'arcsec',\n+    'CUNIT2': 'arcsec',\n+    'CUNIT3': 'Angstrom',\n+    'CTYPE1': 'HPLN-TAN',\n+    'CTYPE2': 'HPLT-TAN',\n+    'CTYPE3': 'WAVE',\n+    'CRVAL1': 0.0,\n+    'CRVAL2': 0.0,\n+    'CRVAL3': 1.05,\n+\n+}\n+\n+\n+def test_coupled_world_slicing():\n+    fits_wcs = WCS(header=COUPLED_WCS_HEADER)\n+    sl = SlicedLowLevelWCS(fits_wcs, 0)\n+    world = fits_wcs.pixel_to_world_values(0,0,0)\n+    out_pix = sl.world_to_pixel_values(world[0], world[1])\n+\n+    assert np.allclose(out_pix[0], 0)\n",
+  "workdir": "/var/folders/wd/n_p084lj52xb8hbrg6m9zfdm0000gn/T/cae-h3xthsff",
   "error": ""
 }

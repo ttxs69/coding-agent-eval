@@ -7,43 +7,35 @@ pre{background:#f5f5f5;padding:1em;overflow-x:auto}
 <h1>astropy__astropy-13579</h1>
 <details>
 <summary><strong>claude-code</strong> — resolved</summary>
-<p>Model: <code>MiniMax-M3</code> &middot;
-   Duration: 832s &middot;
-   Cost: $2.16</p>
+<p>Model: <code>glm-5.1</code> &middot;
+   Duration: 528s &middot;
+   Cost: $1.37</p>
 <pre><code>diff --git a/astropy/wcs/wcsapi/wrappers/sliced_wcs.py b/astropy/wcs/wcsapi/wrappers/sliced_wcs.py
-index d7605b0..87c819b 100644
+index d7605b0..96bca96 100644
 --- a/astropy/wcs/wcsapi/wrappers/sliced_wcs.py
 +++ b/astropy/wcs/wcsapi/wrappers/sliced_wcs.py
-@@ -244,6 +244,15 @@ class SlicedLowLevelWCS(BaseWCSWrapper):
- 
-     def world_to_pixel_values(self, *world_arrays):
+@@ -246,12 +246,15 @@ class SlicedLowLevelWCS(BaseWCSWrapper):
          world_arrays = tuple(map(np.asanyarray, world_arrays))
-+
-+        # Determine the values of the world coordinates at the slice location
-+        # so that they can be used to invert the parent WCS for any dropped
-+        # world dimensions. The world coordinates at the slice are independent
-+        # of the kept pixel coordinates, since any world dimension that
-+        # depends on a kept pixel dimension is kept.
-+        world_arrays_at_slice = self._pixel_to_world_values_all(
-+            *([0] * self.pixel_n_dim))
-+
          world_arrays_new = []
          iworld_curr = -1
++        idropped = 0
++        dropped_values = self.dropped_world_dimensions.get(&#x27;value&#x27;, [])
          for iworld in range(self._wcs.world_n_dim):
-@@ -251,7 +260,7 @@ class SlicedLowLevelWCS(BaseWCSWrapper):
+             if iworld in self._world_keep:
                  iworld_curr += 1
                  world_arrays_new.append(world_arrays[iworld_curr])
              else:
 -                world_arrays_new.append(1.)
-+                world_arrays_new.append(world_arrays_at_slice[iworld])
++                world_arrays_new.append(dropped_values[idropped])
++                idropped += 1
  
          world_arrays_new = np.broadcast_arrays(*world_arrays_new)
          pixel_arrays = list(self._wcs.world_to_pixel_values(*world_arrays_new))
 diff --git a/astropy/wcs/wcsapi/wrappers/tests/test_sliced_wcs.py b/astropy/wcs/wcsapi/wrappers/tests/test_sliced_wcs.py
-index a354114..dcc5359 100644
+index a354114..667b8a4 100644
 --- a/astropy/wcs/wcsapi/wrappers/tests/test_sliced_wcs.py
 +++ b/astropy/wcs/wcsapi/wrappers/tests/test_sliced_wcs.py
-@@ -899,3 +899,39 @@ def test_pixel_to_world_values_different_int_types():
+@@ -899,3 +899,46 @@ def test_pixel_to_world_values_different_int_types():
      for int_coord, np64_coord in zip(int_sliced.pixel_to_world_values(*pixel_arrays),
                                       np64_sliced.pixel_to_world_values(*pixel_arrays)):
          assert all(int_coord == np64_coord)
@@ -79,17 +71,51 @@ index a354114..dcc5359 100644
 +def test_coupled_world_slicing():
 +    fits_wcs = WCS(header=COUPLED_WCS_HEADER)
 +    sl = SlicedLowLevelWCS(fits_wcs, 0)
-+    world = fits_wcs.pixel_to_world_values(0,0,0)
++    world = fits_wcs.pixel_to_world_values(0, 0, 0)
 +    out_pix = sl.world_to_pixel_values(world[0], world[1])
 +
 +    assert np.allclose(out_pix[0], 0)
++    assert np.allclose(out_pix[1], 0)
++
++    # Also test round-trip with non-origin pixel values
++    world2 = fits_wcs.pixel_to_world_values(5, 10, 0)
++    out_pix2 = sl.world_to_pixel_values(world2[0], world2[1])
++    assert np.allclose(out_pix2[0], 5)
++    assert np.allclose(out_pix2[1], 10)
 </code></pre>
 </details><details>
 <summary><strong>codex</strong> — failed</summary>
 <p>Model: <code>MiniMax-M3</code> &middot;
-   Duration: 391s &middot;
+   Duration: 414s &middot;
    Cost: $?</p>
-<pre><code>diff --git a/astropy/wcs/wcsapi/wrappers/tests/test_sliced_wcs.py b/astropy/wcs/wcsapi/wrappers/tests/test_sliced_wcs.py
+<pre><code>diff --git a/astropy/wcs/wcsapi/wrappers/sliced_wcs.py b/astropy/wcs/wcsapi/wrappers/sliced_wcs.py
+index d7605b0..5dbbd69 100644
+--- a/astropy/wcs/wcsapi/wrappers/sliced_wcs.py
++++ b/astropy/wcs/wcsapi/wrappers/sliced_wcs.py
+@@ -245,13 +245,21 @@ class SlicedLowLevelWCS(BaseWCSWrapper):
+     def world_to_pixel_values(self, *world_arrays):
+         world_arrays = tuple(map(np.asanyarray, world_arrays))
+         world_arrays_new = []
++        # Use the world coordinates at the slice position for any dropped
++        # world dimensions. Substituting a constant value is incorrect when
++        # the dropped dimension is coupled to a kept pixel dimension via a
++        # non-trivial PC matrix, because the inverse transformation is
++        # sensitive to the value of the dropped world coordinate.
++        dropped_values = self.dropped_world_dimensions[&quot;value&quot;]
+         iworld_curr = -1
++        idropped = 0
+         for iworld in range(self._wcs.world_n_dim):
+             if iworld in self._world_keep:
+                 iworld_curr += 1
+                 world_arrays_new.append(world_arrays[iworld_curr])
+             else:
+-                world_arrays_new.append(1.)
++                world_arrays_new.append(dropped_values[idropped])
++                idropped += 1
+ 
+         world_arrays_new = np.broadcast_arrays(*world_arrays_new)
+         pixel_arrays = list(self._wcs.world_to_pixel_values(*world_arrays_new))
+diff --git a/astropy/wcs/wcsapi/wrappers/tests/test_sliced_wcs.py b/astropy/wcs/wcsapi/wrappers/tests/test_sliced_wcs.py
 index a354114..dcc5359 100644
 --- a/astropy/wcs/wcsapi/wrappers/tests/test_sliced_wcs.py
 +++ b/astropy/wcs/wcsapi/wrappers/tests/test_sliced_wcs.py

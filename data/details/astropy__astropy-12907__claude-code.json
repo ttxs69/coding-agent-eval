@@ -1,14 +1,14 @@
 {
-  "run_id": "2026-06-08T02-28-02__claude-code__astropy__astropy-12907",
+  "run_id": "2026-06-08T04-38-38__claude-code__astropy__astropy-12907",
   "task_id": "astropy__astropy-12907",
   "agent": "claude-code",
   "agent_version": "2.1.153 (Claude Code)",
-  "model": "MiniMax-M3",
+  "model": "glm-5.1",
   "mode": "local",
   "status": "resolved",
-  "started_at": "2026-06-08T02:28:02Z",
-  "duration_sec": 310.4687513340032,
-  "harness_git_sha": "05bf567",
+  "started_at": "2026-06-08T04:38:38Z",
+  "duration_sec": 166.31530570797622,
+  "harness_git_sha": "8fdca78",
   "task_source": {
     "kind": "swe-bench",
     "split": "test",
@@ -16,9 +16,9 @@
     "swe_bench_commit": "c104f840cc67f8b6eec6f759ebc8b2693d585d4a"
   },
   "usage": {
-    "tokens_in": 173476,
-    "tokens_out": 10168,
-    "cost_usd": 1.8380595,
+    "tokens_in": 32627,
+    "tokens_out": 5660,
+    "cost_usd": 0.538523,
     "billing_mode": "api"
   },
   "test_results": {
@@ -65,7 +65,7 @@
       }
     }
   },
-  "patch": "diff --git a/astropy/modeling/separable.py b/astropy/modeling/separable.py\nindex a308e27..45bea36 100644\n--- a/astropy/modeling/separable.py\n+++ b/astropy/modeling/separable.py\n@@ -242,7 +242,7 @@ def _cstack(left, right):\n         cright = _coord_matrix(right, 'right', noutp)\n     else:\n         cright = np.zeros((noutp, right.shape[1]))\n-        cright[-right.shape[0]:, -right.shape[1]:] = 1\n+        cright[-right.shape[0]:, -right.shape[1]:] = right\n \n     return np.hstack([cleft, cright])\n \ndiff --git a/astropy/modeling/tests/test_separable.py b/astropy/modeling/tests/test_separable.py\nindex 8dfe5c8..ce3d94e 100644\n--- a/astropy/modeling/tests/test_separable.py\n+++ b/astropy/modeling/tests/test_separable.py\n@@ -28,6 +28,13 @@ p22 = models.Polynomial2D(2, name='p22')\n p1 = models.Polynomial1D(1, name='p1')\n \n \n+cm_4d_expected = (np.array([False, False, True, True]),\n+                  np.array([[True,  True,  False, False],\n+                            [True,  True,  False, False],\n+                            [False, False, True,  False],\n+                            [False, False, False, True]]))\n+\n+\n compound_models = {\n     'cm1': (map3 & sh1 | rot & sh1 | sh1 & sh2 & sh1,\n             (np.array([False, False, True]),\n@@ -52,7 +59,17 @@ compound_models = {\n     'cm7': (map2 | p2 & sh1,\n             (np.array([False, True]),\n              np.array([[True, False], [False, True]]))\n-            )\n+            ),\n+    'cm8': (rot & (sh1 & sh2), cm_4d_expected),\n+    'cm9': (rot & sh1 & sh2, cm_4d_expected),\n+    'cm10': ((rot & sh1) & sh2, cm_4d_expected),\n+    'cm11': (rot & sh1 & (scl1 & scl2),\n+             (np.array([False, False, True, True, True]),\n+              np.array([[True,  True,  False, False, False],\n+                        [True,  True,  False, False, False],\n+                        [False, False, True,  False, False],\n+                        [False, False, False, True,  False],\n+                        [False, False, False, False, True]]))),\n }\n \n \n@@ -148,3 +165,22 @@ def test_custom_model_separable():\n \n     assert not model_c().separable\n     assert np.all(separability_matrix(model_c()) == [True, True])\n+\n+\n+def test_nested_compound_model_right_separable():\n+    # Regression test: separability_matrix should give the same result\n+    # for nested and flat compound models with the '&' operator.\n+    # The bug was in _cstack: when the right operand was already a\n+    # separability matrix, it was overwritten with all 1s, losing the\n+    # nested structure.\n+    cm = models.Linear1D(10) & models.Linear1D(5)\n+\n+    flat = models.Pix2Sky_TAN() & models.Linear1D(10) & models.Linear1D(5)\n+    nested = models.Pix2Sky_TAN() & cm\n+\n+    expected = np.array([[True,  True, False, False],\n+                         [True,  True, False, False],\n+                         [False, False, True,  False],\n+                         [False, False, False, True]])\n+    assert_allclose(separability_matrix(flat), expected)\n+    assert_allclose(separability_matrix(nested), expected)\n",
-  "workdir": "/var/folders/wd/n_p084lj52xb8hbrg6m9zfdm0000gn/T/cae-3yfheb66",
+  "patch": "diff --git a/astropy/modeling/separable.py b/astropy/modeling/separable.py\nindex a308e27..45bea36 100644\n--- a/astropy/modeling/separable.py\n+++ b/astropy/modeling/separable.py\n@@ -242,7 +242,7 @@ def _cstack(left, right):\n         cright = _coord_matrix(right, 'right', noutp)\n     else:\n         cright = np.zeros((noutp, right.shape[1]))\n-        cright[-right.shape[0]:, -right.shape[1]:] = 1\n+        cright[-right.shape[0]:, -right.shape[1]:] = right\n \n     return np.hstack([cleft, cright])\n \ndiff --git a/astropy/modeling/tests/test_separable.py b/astropy/modeling/tests/test_separable.py\nindex 8dfe5c8..024b239 100644\n--- a/astropy/modeling/tests/test_separable.py\n+++ b/astropy/modeling/tests/test_separable.py\n@@ -28,6 +28,13 @@ p22 = models.Polynomial2D(2, name='p22')\n p1 = models.Polynomial1D(1, name='p1')\n \n \n+cm_4d_expected = (np.array([False, False, True, True]),\n+                  np.array([[True,  True,  False, False],\n+                            [True,  True,  False, False],\n+                            [False, False, True,  False],\n+                            [False, False, False, True]]))\n+\n+\n compound_models = {\n     'cm1': (map3 & sh1 | rot & sh1 | sh1 & sh2 & sh1,\n             (np.array([False, False, True]),\n@@ -52,7 +59,17 @@ compound_models = {\n     'cm7': (map2 | p2 & sh1,\n             (np.array([False, True]),\n              np.array([[True, False], [False, True]]))\n-            )\n+            ),\n+    'cm8': (rot & (sh1 & sh2), cm_4d_expected),\n+    'cm9': (rot & sh1 & sh2, cm_4d_expected),\n+    'cm10': ((rot & sh1) & sh2, cm_4d_expected),\n+    'cm11': (rot & sh1 & (scl1 & scl2),\n+             (np.array([False, False, True, True, True]),\n+              np.array([[True,  True,  False, False, False],\n+                        [True,  True,  False, False, False],\n+                        [False, False, True,  False, False],\n+                        [False, False, False, True,  False],\n+                        [False, False, False, False, True]]))),\n }\n \n \n",
+  "workdir": "/var/folders/wd/n_p084lj52xb8hbrg6m9zfdm0000gn/T/cae-tp0lmwvi",
   "error": ""
 }

@@ -7,11 +7,11 @@ pre{background:#f5f5f5;padding:1em;overflow-x:auto}
 <h1>astropy__astropy-13033</h1>
 <details>
 <summary><strong>claude-code</strong> — resolved</summary>
-<p>Model: <code>MiniMax-M3</code> &middot;
-   Duration: 375s &middot;
-   Cost: $1.85</p>
+<p>Model: <code>glm-5.1</code> &middot;
+   Duration: 206s &middot;
+   Cost: $0.59</p>
 <pre><code>diff --git a/astropy/timeseries/core.py b/astropy/timeseries/core.py
-index c279f35..2a44c18 100644
+index c279f35..2c61461 100644
 --- a/astropy/timeseries/core.py
 +++ b/astropy/timeseries/core.py
 @@ -76,9 +76,16 @@ class BaseTimeSeries(QTable):
@@ -22,15 +22,15 @@ index c279f35..2a44c18 100644
 -                                 &quot;as the first column{} but found &#x27;{}&#x27;&quot;
 -                                 .format(self.__class__.__name__, required_columns[0], plural, self.colnames[0]))
 +                if len(required_columns) == 1:
-+                    expected = &quot;&#x27;{}&#x27;&quot;.format(required_columns[0])
-+                    found = &quot;&#x27;{}&#x27;&quot;.format(self.colnames[0])
++                    expected_str = &quot;&#x27;{}&#x27;&quot;.format(required_columns[0])
++                    found_str = &quot;&#x27;{}&#x27;&quot;.format(self.colnames[0])
 +                else:
-+                    expected = str(required_columns)
-+                    found = str(self.colnames[:len(required_columns)])
++                    expected_str = &quot;{}&quot;.format(required_columns)
++                    found_str = &quot;{}&quot;.format(self.colnames[:len(required_columns)])
 +
 +                raise ValueError(&quot;{} object is invalid - expected {} &quot;
 +                                 &quot;as the first column{} but found {}&quot;
-+                                 .format(self.__class__.__name__, expected, plural, found))
++                                 .format(self.__class__.__name__, expected_str, plural, found_str))
  
              if (self._required_columns_relax
                      and self._required_columns == self.colnames[:len(self._required_columns)]):
@@ -57,35 +57,51 @@ index bcc06d9..241d711 100644
 </details><details>
 <summary><strong>codex</strong> — failed</summary>
 <p>Model: <code>MiniMax-M3</code> &middot;
-   Duration: 206s &middot;
+   Duration: 269s &middot;
    Cost: $?</p>
 <pre><code>diff --git a/astropy/timeseries/core.py b/astropy/timeseries/core.py
-index c279f35..b90bc63 100644
+index c279f35..0b0eb87 100644
 --- a/astropy/timeseries/core.py
 +++ b/astropy/timeseries/core.py
-@@ -76,9 +76,19 @@ class BaseTimeSeries(QTable):
+@@ -74,14 +74,30 @@ class BaseTimeSeries(QTable):
+                                  &quot;as the first column{} but time series has no columns&quot;
+                                  .format(self.__class__.__name__, required_columns[0], plural))
  
-             elif self.colnames[:len(required_columns)] != required_columns:
- 
+-            elif self.colnames[:len(required_columns)] != required_columns:
+-
 -                raise ValueError(&quot;{} object is invalid - expected &#x27;{}&#x27; &quot;
 -                                 &quot;as the first column{} but found &#x27;{}&#x27;&quot;
 -                                 .format(self.__class__.__name__, required_columns[0], plural, self.colnames[0]))
-+                missing_columns = [c for c in required_columns
-+                                   if c not in self.colnames]
+-
+-            if (self._required_columns_relax
+-                    and self._required_columns == self.colnames[:len(self._required_columns)]):
++        elif self.colnames[:len(required_columns)] != required_columns:
 +
-+                if missing_columns:
-+                    raise ValueError(
-+                        &quot;{} object is invalid - missing required column{}: {}&quot;
-+                        .format(self.__class__.__name__,
-+                                &#x27;s&#x27; if len(missing_columns) &gt; 1 else &#x27;&#x27;,
-+                                &#x27;, &#x27;.join(repr(c) for c in missing_columns)))
-+                else:
-+                    raise ValueError(&quot;{} object is invalid - expected &#x27;{}&#x27; &quot;
-+                                     &quot;as the first column{} but found &#x27;{}&#x27;&quot;
-+                                     .format(self.__class__.__name__, required_columns[0], plural, self.colnames[0]))
++            # Find the first position at which the columns do not match. If
++            # the first column is wrong, report it as a wrong-first-column
++            # error. Otherwise, the table is missing a required column (or
++            # has a different column where one was expected) and we list the
++            # required vs. actual columns so the user can tell which one is
++            # missing.
++            for index, required in enumerate(required_columns):
++                if index &gt;= len(self.colnames) or self.colnames[index] != required:
++                    if index == 0:
++                        raise ValueError(&quot;{} object is invalid - expected &#x27;{}&#x27; &quot;
++                                         &quot;as the first column{} but found &#x27;{}&#x27;&quot;
++                                         .format(self.__class__.__name__,
++                                                 required_columns[0], plural,
++                                                 self.colnames[0]))
++                    raise ValueError(&quot;{} object is invalid - expected {} &quot;
++                                     &quot;as the first column{} but found {}&quot;
++                                     .format(self.__class__.__name__,
++                                             required_columns, plural,
++                                             self.colnames[:len(required_columns)]))
++
++        if (self._required_columns_relax
++                and self._required_columns == self.colnames[:len(self._required_columns)]):
+                 self._required_columns_relax = False
  
-             if (self._required_columns_relax
-                     and self._required_columns == self.colnames[:len(self._required_columns)]):
+     @contextmanager
 diff --git a/astropy/timeseries/tests/test_sampled.py b/astropy/timeseries/tests/test_sampled.py
 index bcc06d9..241d711 100644
 --- a/astropy/timeseries/tests/test_sampled.py
