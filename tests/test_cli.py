@@ -164,6 +164,45 @@ def test_cae_run_force_flag_resumes(tmp_path, tiny_task_path):
     assert r3.returncode == 0
 
 
+def test_cae_run_resume_matches_discovered_model(tmp_path, tiny_task_path, monkeypatch):
+    """Without --model, the resume glob must use the adapter's discovered
+    model (not the literal 'default'), otherwise a re-run after a real
+    run would re-execute instead of skipping.
+    """
+    from cae.agents import ADAPTERS
+    from cae.agents.mock import MockAdapter
+    from cae.cli import _resolve_effective_model, _safe_model_for_filename
+
+    class _DiscoveredMock(MockAdapter):
+        name = "discovered-mock"
+        def _discover_model(self) -> str:
+            return "discovered-model-X"
+    ADAPTERS["discovered-mock"] = _DiscoveredMock
+    try:
+        # When --model is None, the resume check must discover the model
+        # the same way the harness will, not default to "default".
+        effective = _resolve_effective_model("discovered-mock", None)
+        assert effective == "discovered-model-X", (
+            f"expected discovered model, got {effective!r}"
+        )
+        # The filename-safe form should match what the harness writes.
+        assert _safe_model_for_filename(effective) == "discovered-model-X"
+        assert _safe_model_for_filename(None) == "default"
+        # And `/` and `:` are replaced for filesystem safety.
+        assert _safe_model_for_filename("org/model:1") == "org-model-1"
+    finally:
+        ADAPTERS.pop("discovered-mock", None)
+
+
+def test_cae_run_resume_uses_default_when_no_model_or_discover():
+    """When neither --model nor _discover_model produce a name (mock
+    adapter has neither), the resume check falls back to 'default'."""
+    from cae.cli import _resolve_effective_model, _safe_model_for_filename
+    # 'mock' has no _discover_model and default_model is None.
+    assert _resolve_effective_model("mock", None) is None
+    assert _safe_model_for_filename(_resolve_effective_model("mock", None)) == "default"
+
+
 def test_cae_run_docker_flag_accepted(tmp_path, tiny_task_path):
     """`--docker` is accepted by argparse; the run will fail if `docker` is not
     on PATH. We mock `subprocess.run` to assert that the docker-runner branch

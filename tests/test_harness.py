@@ -137,6 +137,49 @@ def test_model_defaults_to_none_when_omitted(tmp_path, tiny_task_path, model_cap
     assert result["model"] == "test-model-1"
 
 
+def test_started_at_reflects_run_start_not_result_assembly(
+    tmp_path, tiny_task_path, fixing_mock, monkeypatch,
+):
+    """`started_at` must reflect when the run started, not when the result
+    was assembled. Otherwise a multi-minute agent run reports `started_at`
+    minutes after it actually began — useless for ordering or correlating
+    with logs.
+
+    The harness has `_record_run_start()` (called at the top of `run()`)
+    and `_get_run_started_at()` for this exact purpose. This test pins
+    that the consumer (`_result()`) actually uses the captured time."""
+    # Return distinct, increasing timestamps so we can tell which call
+    # sourced started_at.
+    counter = {"n": 0}
+    def fake_now_iso():
+        counter["n"] += 1
+        return f"T{counter['n']:03d}"
+    monkeypatch.setattr("cae.harness._utc_now_iso", fake_now_iso)
+    # Reset module-level cache so prior tests don't leak in.
+    monkeypatch.setattr("cae.harness._run_started_at", None)
+
+    repo_src = tiny_task_path / "repo"
+    workdir = tmp_path / "workdir"
+    subprocess.run(["cp", "-r", str(repo_src), str(workdir)], check=True)
+    subprocess.run(["git", "init", "-q"], cwd=workdir, check=True)
+    subprocess.run(["git", "config", "user.email", "t@x"], cwd=workdir, check=True)
+    subprocess.run(["git", "config", "user.name", "t"], cwd=workdir, check=True)
+    subprocess.run(["git", "add", "."], cwd=workdir, check=True)
+    subprocess.run(["git", "commit", "-q", "-m", "init"], cwd=workdir, check=True)
+
+    result = run(task_path=tiny_task_path, agent_name="mock", workdir=workdir)
+
+    # The first _utc_now_iso() call happens inside _record_run_start() at
+    # the top of run(); that's the value started_at must reflect. If the
+    # value is a later T-number, _result() is calling _utc_now_iso()
+    # directly instead of _get_run_started_at().
+    assert result["started_at"] == "T001", (
+        f"started_at should be the first captured timestamp (T001, when "
+        f"_record_run_start() ran), not {result['started_at']!r}. "
+        f"_result() must call _get_run_started_at(), not _utc_now_iso()."
+    )
+
+
 def test_preflight_task_error_records_agent_model_and_version(
     tmp_path, tiny_task_path, mock_with_model,
 ):

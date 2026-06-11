@@ -36,6 +36,23 @@ def _utc_now_iso() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
+_run_started_at: str | None = None
+
+
+def _record_run_start() -> str:
+    """Capture the wall-clock time the run started. Called at the top of
+    `run()` so the result's `started_at` reflects the actual run start,
+    not the time the result dict was assembled (which can be minutes
+    later for long-running tasks)."""
+    global _run_started_at
+    _run_started_at = _utc_now_iso()
+    return _run_started_at
+
+
+def _get_run_started_at() -> str:
+    return _run_started_at or _utc_now_iso()
+
+
 def _run_id_for_now() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H-%M-%S")
 
@@ -184,6 +201,7 @@ def run(
     fail_to_pass = task["fail_to_pass"]
     pass_to_pass = task["pass_to_pass"]
     mode = "docker" if docker else "local"
+    _record_run_start()  # capture wall-clock for the result's started_at
 
     # 1-3: Resolve task, create workdir, fetch repo
     workdir_owned = workdir is None
@@ -362,7 +380,7 @@ def _result(task, agent_name, mode, status, agent_version, pre_flight, post_flig
         "model": agent_model,
         "mode": mode,
         "status": status.value,
-        "started_at": _utc_now_iso(),
+        "started_at": _get_run_started_at(),
         "duration_sec": agent_duration,
         "harness_git_sha": _git_sha_cached(),
         "task_source": task.get("source"),

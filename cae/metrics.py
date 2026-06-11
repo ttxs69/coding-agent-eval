@@ -45,9 +45,15 @@ def aggregate_results(results_dir: Path) -> list[dict]:
         # passed and the agent ran). task_error / grader_error mean the
         # task itself is ungradeable and shouldn't penalise the agent.
         attempted = [r for r in results if r.get("status") in ATTEMPTED_STATUSES]
-        n_resolved = sum(1 for r in attempted if r["status"] == "resolved")
-        n_attempted = len({r["task_id"] for r in attempted})
-        # Track how many tasks were skipped due to harness errors (so
+        # With --repeat N, a task produces N result files. Count UNIQUE
+        # task_ids so pass_rate stays in [0,1] (pass@k semantics: a task
+        # counts as resolved if ANY repeat resolved). Without this,
+        # 3 repeats × 1 resolved = pass_rate 3.0.
+        attempted_task_ids = {r["task_id"] for r in attempted}
+        resolved_task_ids = {r["task_id"] for r in attempted if r["status"] == "resolved"}
+        n_resolved = len(resolved_task_ids)
+        n_attempted = len(attempted_task_ids)
+        # Track how many runs were skipped due to harness errors (so
         # the user can see "X attempted of Y total" in the table).
         n_skipped = len(results) - len(attempted)
         rows.append({

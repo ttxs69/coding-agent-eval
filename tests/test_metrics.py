@@ -107,3 +107,55 @@ def test_aggregate_median_cache_tokens(two_results_dir):
     rows = aggregate_results(two_results_dir)
     assert rows[0]["median_cache_read_tokens"] == 9000
     assert rows[0]["median_cache_creation_tokens"] == 200
+
+
+def test_aggregate_pass_rate_capped_at_one_with_repeats(tmp_path):
+    """With --repeat N, a single task produces N result files. n_attempted
+    counts UNIQUE task_ids (1 for a repeated task), so n_resolved must also
+    count unique resolved tasks — otherwise pass_rate goes above 1.0.
+
+    Convention is pass@k: a task counts as resolved if ANY repeat resolved.
+    """
+    d = tmp_path / "results"
+    d.mkdir()
+    # Same task t1, repeated 3 times, all resolved.
+    for i in (1, 2, 3):
+        (d / f"r{i}.json").write_text(json.dumps({
+            "agent": "claude-code", "agent_version": "1.0", "model": "claude-opus-4-7",
+            "status": "resolved", "duration_sec": 100,
+            "usage": {"cost_usd": 0.1}, "test_results": {}, "task_id": "t1",
+        }))
+    rows = aggregate_results(d)
+    assert len(rows) == 1
+    assert rows[0]["n_attempted"] == 1, "one unique task"
+    # n_resolved must use unique-task semantics to match n_attempted.
+    assert rows[0]["n_resolved"] == 1, (
+        f"expected 1 unique resolved task, got n_resolved={rows[0]['n_resolved']}. "
+        f"pass_rate is now {rows[0]['pass_rate']} which is > 1.0 — invalid."
+    )
+    assert rows[0]["pass_rate"] == 1.0
+
+
+def test_aggregate_pass_at_k_resolves_if_any_repeat_resolves(tmp_path):
+    """pass@k semantics: a task counts as resolved if ANY repeat resolved.
+    If 1/3 repeats resolve, the task is still resolved."""
+    d = tmp_path / "results"
+    d.mkdir()
+    # Task t1: 3 repeats, only the 2nd resolves.
+    for i, status in [(1, "failed"), (2, "resolved"), (3, "failed")]:
+        (d / f"r{i}.json").write_text(json.dumps({
+            "agent": "claude-code", "agent_version": "1.0", "model": "claude-opus-4-7",
+            "status": status, "duration_sec": 100,
+            "usage": {"cost_usd": 0.1}, "test_results": {}, "task_id": "t1",
+        }))
+    # Task t2: 2 repeats, neither resolves.
+    for i, status in [(1, "failed"), (2, "failed")]:
+        (d / f"t2_r{i}.json").write_text(json.dumps({
+            "agent": "claude-code", "agent_version": "1.0", "model": "claude-opus-4-7",
+            "status": status, "duration_sec": 100,
+            "usage": {"cost_usd": 0.1}, "test_results": {}, "task_id": "t2",
+        }))
+    rows = aggregate_results(d)
+    assert rows[0]["n_attempted"] == 2  # t1, t2
+    assert rows[0]["n_resolved"] == 1   # t1 (one repeat resolved)
+    assert rows[0]["pass_rate"] == 0.5

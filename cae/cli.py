@@ -8,6 +8,39 @@ import sys
 from pathlib import Path
 
 
+def _resolve_effective_model(agent_name: str, requested_model: str | None) -> str | None:
+    """Return the model name the harness will use for the given agent.
+
+    Mirrors the harness's logic in `harness.run()`: if the user passed
+    an explicit --model, that's it; otherwise call the adapter's
+    `_discover_model()` (or fall back to its `default_model`). Used
+    by the resume check so the glob matches the filename the harness
+    will actually write.
+    """
+    if requested_model is not None:
+        return requested_model
+    try:
+        from cae.agents import get_adapter
+        adapter = get_adapter(agent_name)
+        discover = getattr(adapter, "_discover_model", None)
+        if discover is not None:
+            return discover()
+        return getattr(adapter, "default_model", None)
+    except Exception:
+        return None
+
+
+def _safe_model_for_filename(model: str | None) -> str:
+    """Sanitize a model name for use in result filenames.
+
+    The result file format is `<ts>__<agent>__<model>__<task_id>.json`,
+    so the model segment must be filesystem-safe. We replace `/` and `:`
+    (the only chars we've seen in real model names like `claude-opus-4-7`
+    or `gpt-5`) and fall back to 'default' for None.
+    """
+    return (model or "default").replace("/", "-").replace(":", "-")
+
+
 def cmd_run(args: argparse.Namespace) -> int:
     from cae.harness import run
     task_path = Path(args.tasks_dir) / args.task
@@ -22,9 +55,16 @@ def cmd_run(args: argparse.Namespace) -> int:
     # the actual id used in the filename (not the directory name on disk).
     instance_id = json.loads((task_path / "task.json").read_text())["instance_id"]
 
-    # Sanitize the requested model the same way the harness does (so the
-    # resume glob below matches exactly).
-    requested_model = (args.model or "default").replace("/", "-").replace(":", "-")
+    # Determine the model name the harness will use, so the resume glob
+    # below matches the filename the harness will actually write. The
+    # harness uses args.model when present, else falls back to
+    # adapter._discover_model() / adapter.default_model — we mirror that
+    # so a re-run with no --model still resumes correctly (otherwise the
+    # discovered model (e.g. from ANTHROPIC_MODEL) would land in a
+    # different filename than the resume check is looking for, and the
+    # harness would re-run instead of skipping).
+    effective_model = _resolve_effective_model(args.agent, args.model)
+    safe_model = _safe_model_for_filename(effective_model)
 
     # Resume: per (task, agent, model, repeat-index), skip if a result file
     # already exists. Including the model in the glob means running the
@@ -46,7 +86,7 @@ def cmd_run(args: argparse.Namespace) -> int:
             break
         repeat_index = i if repeat > 1 else None
         suffix = f"__{i}" if repeat_index is not None else ""
-        out_pattern = f"*__{args.agent}__{requested_model}__{instance_id}{suffix}.json"
+        out_pattern = f"*__{args.agent}__{safe_model}__{instance_id}{suffix}.json"
         existing = list(results_dir.glob(out_pattern))
         if existing and not args.force:
             print(f"skipping {out_pattern}: {len(existing)} existing result(s). Use --force to overwrite.")

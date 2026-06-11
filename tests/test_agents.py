@@ -134,6 +134,31 @@ def test_claude_parse_output_extracts_cache_tokens():
     assert result.usage.cache_creation_tokens == 200
 
 
+def test_claude_parse_output_handles_missing_envelope():
+    """If stdout has no valid JSON result envelope (claude crashed early,
+    timed out, returned an error message, etc.), parse_output must still
+    return a valid AgentResult — not raise NameError.
+
+    Regression: cache_read/cache_creation were only assigned inside the
+    `if envelope is not None:` branch; the return statement then referenced
+    them unconditionally and crashed with NameError when no envelope was
+    found.
+    """
+    from cae.agents.claude_code import ClaudeCodeAdapter
+    # Real-world cases this covers:
+    # - claude crashed before printing any JSON
+    # - claude printed only tool-call JSON (no `type: result`)
+    # - the output is plain stderr text
+    for bad_stdout in ("", "Claude crashed.", "{\"type\": \"tool_use\"}\n", "not json at all"):
+        result = ClaudeCodeAdapter().parse_output(bad_stdout, "some stderr", 1)
+        assert result.usage.tokens_in is None
+        assert result.usage.tokens_out is None
+        assert result.usage.cost_usd is None
+        assert result.usage.cache_read_tokens is None
+        assert result.usage.cache_creation_tokens is None
+        assert result.exit_code == 1
+
+
 def test_codex_parse_output_extracts_cached_input_tokens():
     """Codex may use `cached_input_tokens` (its naming convention)."""
     from cae.agents.codex import CodexAdapter

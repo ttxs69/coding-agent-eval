@@ -59,6 +59,24 @@ tests/test_main.py::test_add XFAIL                          [ 50%]
     }
 
 
+def test_parse_pytest_xpass_treated_as_passed():
+    """A test marked @pytest.mark.xfail that unexpectedly passes reports as
+    XPASS. The grader needs to see this as PASSED — otherwise an agent's
+    fix that makes a previously-failing xfail-marked test pass would be
+    graded as FAILED (because the test wouldn't appear in the parsed
+    results dict at all)."""
+    output = """
+tests/test_main.py::test_was_xfail XPASS                    [ 50%]
+"""
+    result = parse_pytest_output(output)
+    assert result == {
+        "tests/test_main.py::test_was_xfail": TestStatus.PASSED,
+    }, (
+        f"XPASS (unexpectedly passing xfail-marked test) must map to "
+        f"PASSED for grading. Got {result!r}."
+    )
+
+
 def test_parse_pytest_empty():
     assert parse_pytest_output("") == {}
     assert parse_pytest_output("no test results here") == {}

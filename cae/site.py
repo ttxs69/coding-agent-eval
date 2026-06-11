@@ -182,13 +182,21 @@ def _task_html(task_id: str, results: list[dict]) -> str:
         # which tests were expected vs. observed without re-loading the JSON.
         test_block = ""
         tr = r.get("test_results") or {}
+        # Bucket name → human-friendly label and the meaning of "good"
+        # at post-flight. (Pass-to-pass tests must STILL pass; fail-to-pass
+        # tests must NOW pass.)
+        bucket_labels = {
+            "fail_to_pass": ("Should now pass", "passed"),
+            "pass_to_pass": ("Should still pass", "passed"),
+        }
         if tr:
             rows = []
             for kind in ("fail_to_pass", "pass_to_pass"):
+                label, _expected = bucket_labels[kind]
                 for name, status in (tr.get("pre_flight", {}).get(kind) or {}).items():
                     post = (tr.get("post_flight", {}).get(kind) or {}).get(name, "?")
                     rows.append(
-                        f"<tr><td>{html.escape(kind)}</td>"
+                        f"<tr><td>{html.escape(label)}</td>"
                         f"<td><code>{html.escape(name)}</code></td>"
                         f"<td>{html.escape(status)}</td>"
                         f"<td>{html.escape(post)}</td></tr>"
@@ -271,15 +279,18 @@ def build_site(results_dir: Path, out_dir: Path, docs_dir: Path | None = None) -
     for task_id, results in by_task.items():
         (out_dir / "tasks" / f"{task_id}.html").write_text(_task_html(task_id, results))
 
-    # 4. Per-run detail JSONs (consumed by the per-task pages or external tools)
+    # 4. Per-run detail JSONs (consumed by the per-task pages or external tools).
+    # Use the source filename (which encodes timestamp + agent + model + task,
+    # and is unique by construction) so multiple runs for the same (task, agent)
+    # — e.g. --repeat N or different --model — each get their own detail file
+    # instead of clobbering each other.
     details_dir = out_dir / "data" / "details"
     details_dir.mkdir(exist_ok=True)
     for f in sorted(results_dir.glob("*.json")):
         data = json.loads(f.read_text())
         if data.get("agent") == "mock":
             continue
-        out_name = f"{data['task_id']}__{data['agent']}.json"
-        (details_dir / out_name).write_text(json.dumps(data, indent=2, default=str))
+        (details_dir / f.name).write_text(json.dumps(data, indent=2, default=str))
 
     # 4. Reproducibility doc (if source present)
     if docs_dir and (docs_dir / "reproducibility.md").exists():

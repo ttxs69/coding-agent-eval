@@ -92,6 +92,12 @@ class ClaudeCodeAdapter:
         tokens_in = None
         tokens_out = None
         model = None
+        # Initialize cache vars here, not inside the envelope branch. They're
+        # passed to UsageInfo unconditionally, so if no envelope is found
+        # (e.g. claude crashed before printing JSON) we'd hit UnboundLocalError
+        # in the return statement (the try/except below doesn't cover it).
+        cache_read = None
+        cache_creation = None
         # Claude Code's --output-format json emits a final JSON envelope. The
         # harness may also have other JSON lines (tool calls etc.) — we look
         # for the last "type": "result" entry.
