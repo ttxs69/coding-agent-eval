@@ -76,7 +76,38 @@ class AgentAdapter(Protocol):
     name: str
     default_model: str | None
 
-    def is_available(self) -> bool: ...
-    def version(self) -> str: ...
-    def build_command(self, workdir: Path, prompt: str, *, model: str | None) -> list[str]: ...
-    def parse_output(self, stdout: str, stderr: str, exit_code: int) -> AgentResult: ...
+    def is_available(self) -> bool:
+        """True if the agent's CLI binary is installed and on PATH.
+
+        The harness uses this to skip adapters whose agents aren't installed
+        when iterating over registered adapters.
+        """
+        ...
+
+    def version(self) -> str:
+        """Version string (e.g. ``"claude-code 1.0.0"``).
+
+        Returns ``"not-installed"`` or ``"unknown (<error>)"`` if the binary
+        is missing or fails to report a version. Captured before the agent
+        runs so every result row — even ``task_error`` — records agent identity.
+        """
+        ...
+
+    def build_command(self, workdir: Path, prompt: str, *, model: str | None) -> list[str]:
+        """Argv list to invoke the agent on ``prompt`` with cwd=``workdir``.
+
+        ``model`` overrides ``default_model`` when given; adapters that don't
+        support per-run model selection may ignore it. The harness runs the
+        returned list directly via subprocess (or wraps it in ``sh -c`` for
+        docker mode).
+        """
+        ...
+
+    def parse_output(self, stdout: str, stderr: str, exit_code: int) -> AgentResult:
+        """Convert the agent's stdout/stderr/exit_code into an ``AgentResult``.
+
+        Populates usage (tokens, cost, model) and the raw log. The harness
+        extracts the patch via ``git diff`` separately — this method should
+        NOT try to parse the patch from agent output.
+        """
+        ...
