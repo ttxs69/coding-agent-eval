@@ -173,7 +173,7 @@ On Ctrl-C / Escape: clean up current worktree (try/finally), write partial state
 
 ## 7. Safety rails
 
-- **Never touch:** `.git/`, `.claude/`, `node_modules/`, `.venv/`, `venv/`, `__pycache__/`, `dist/`, `build/`, lockfiles (unless candidate is explicitly `deps`).
+- **Never touch:** `.git/`; user/system config under `.claude/` (`settings.json`, `settings.local.json`, `commands/`, `skills/`, `agents/`, `hooks/`, `plugins/`) — exception: this skill's own artifacts (`.claude/self-improve-state.md`, `.claude/self-improve-state.md.tmp`, `.claude/worktrees/`) are managed by the workflow. Also never touch `node_modules/`, `.venv/`, `venv/`, `__pycache__/`, `dist/`, `build/`, or lockfiles (unless candidate is explicitly `deps`).
 - **No external-state mutations:** refuse to run `npm publish`, `git push`, `terraform apply`, `docker push`, `kubectl apply`, or anything else that affects systems beyond the local repo.
 - **Per-file change cap per run:** default 3 — prevents rewriting the same file N times in one run.
 - **Worktree cleanup always runs** (try/finally), even on failure.
