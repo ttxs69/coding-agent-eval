@@ -45,9 +45,10 @@ description: Use when the user wants to autonomously improve a codebase. Scans f
 The skill does **not** read CLAUDE.md for project-specific configuration. It auto-detects from project files:
 
 - **Language/runtime:** `pyproject.toml` → Python+uv; `package.json` → Node; `Cargo.toml` → Rust; `go.mod` → Go; etc.
-- **Test command:** derive from language (`uv run pytest`, `npm test`, `cargo test`, `go test ./...`)
+- **Test command:** derive from language (`uv run pytest`, `npm test`, `cargo test`, `go test ./...`). If none detected (e.g., docs-only repo), the verify step skips test execution and relies on linters alone — candidates that require test evidence are deprioritized.
 - **Linters/type-checkers:** detect from config (`ruff`/`mypy` from pyproject; `eslint`/`tsc` from package.json; `clippy` for Rust)
 - **Build system:** derive from language
+- **Default branch:** read via `git symbolic-ref refs/remotes/origin/HEAD` (falls back to `main`, then `master`). Used as the merge target in step 8 — never hardcoded.
 
 ### 3.4 Runtime artifacts (gitignored)
 
@@ -81,14 +82,14 @@ A loop. Each iteration produces one branch (one improvement), then asks the user
 
 5. **Verify** — run the affected tests + full suite if cheap. Uses `verification-before-completion`: no claiming success without evidence.
 
-6. **Review** — use `requesting-code-review` (or the project's `/code-review` if available). If review finds real issues, fix (one retry) or skip.
+6. **Review** — use `requesting-code-review` (or the project's `/code-review` if available). If neither is available, perform a self-review of the diff inline (the workflow's own checklist: correctness, regressions, scope creep, security) and note in the state record that no formal review skill ran. If review finds real issues, fix (one retry) or skip.
 
 7. **Commit** — commit to the branch with a conventional-commit message. Uses `finishing-a-development-branch`. Do **not** push.
 
 8. **Offer merge** — surface the branch with a one-line summary and ask the user:
-   - `merge` → switch to main, merge (fast-forward if possible, else `--no-ff`), **do not push** without an explicit ask
-   - `defer` → leave branch, continue to next iteration; surface again in end-of-run summary
-   - `skip` → leave branch for manual review, mark in state as "left for manual"
+   - `merge` → switch to the detected default branch, merge (fast-forward if possible, else `--no-ff`), **do not push** without an explicit ask. After successful merge: delete the worktree and the merged branch.
+   - `defer` → leave branch and worktree in place, continue to next iteration; surface again in end-of-run summary.
+   - `skip` → leave branch for manual review, delete the worktree (branch stays so the user can find it), mark in state as "left for manual".
 
 9. **Record** — update `.claude/self-improve-state.md` with the candidate, branch name, outcome, and merge decision.
 
@@ -149,7 +150,7 @@ Write to `.claude/self-improve-state.md.tmp`, then atomic rename. Avoids corrupt
 
 1. No candidates found after scan.
 2. Max iterations reached — default **10** (configurable: `self-improve max=20`).
-3. N consecutive failures — default **3** (something is wrong; surface to user instead of grinding).
+3. N consecutive failures — default **3**. A "failure" counts as: `skipped-tests-failed`, `skipped-review-rejected` (after retry), `skipped-other` from apply-produces-no-change, or worktree-creation-failed. A `deferred` or `merged` outcome resets the counter. Surface to user instead of grinding when this trips.
 4. Token budget hit — default **500K total** (configurable: `self-improve budget=1M`).
 5. Wall-clock budget — default **30 min**.
 6. User interrupts (Ctrl-C / Escape).
