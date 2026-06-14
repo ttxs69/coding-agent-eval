@@ -6,6 +6,7 @@ seeded issues the skill is supposed to find. Run via:
 """
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -67,17 +68,27 @@ def test_fixture_has_seeded_missing_docstring():
 
 
 def test_fixture_test_command_fails_on_seeded_bug():
-    """Running pytest in the fixture should fail (because of the seeded bug).
+    """Running pytest in the fixture should fail on the seeded bug.
 
-    This validates the fixture is set up correctly for the skill's
-    verify step to detect failures.
+    Validates the fixture is set up correctly for the skill's verify step.
+    Sets PYTHONPATH so the test doesn't depend on an editable install of
+    `sample` — works on a fresh `git clone && uv sync` with no manual setup.
     """
+    env = {"PYTHONPATH": str(FIXTURE / "src"), **os.environ}
     result = subprocess.run(
         [sys.executable, "-m", "pytest", "tests/", "-x", "--tb=no", "-q"],
         cwd=FIXTURE,
+        env=env,
         capture_output=True,
         text=True,
     )
-    assert result.returncode != 0, (
-        f"expected pytest to fail due to seeded bug, but it passed:\n{result.stdout}"
+    assert result.returncode == 1, (
+        f"expected pytest to fail with exit 1 (test failure) on seeded bug;\n"
+        f"got exit {result.returncode}.\n"
+        f"stdout:\n{result.stdout}\n"
+        f"stderr:\n{result.stderr}"
+    )
+    assert "test_add_basic" in result.stdout, (
+        f"expected failure to mention test_add_basic (the seeded bug);\n"
+        f"stdout:\n{result.stdout}"
     )

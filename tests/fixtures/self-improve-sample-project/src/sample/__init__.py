@@ -12,7 +12,8 @@ def add(a, b):
 
 
 def multiply(a, b):
-    # No test exists for this function — missing-test candidate
+    # Has a test below (test_multiply_basic). Contrast with public_api_function,
+    # which is the real "missing test" candidate the self-improve skill should find.
     return a * b
 
 
