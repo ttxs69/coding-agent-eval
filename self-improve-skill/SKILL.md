@@ -31,6 +31,7 @@ Detect from project files; do **not** read CLAUDE.md for config:
 1. Read `.claude/self-improve-state.md` if it exists (missing → treat as empty)
 2. Scan `git log` for already-merged `self-improve/*` branches as a backstop
 3. Verify working tree is clean: if dirty, **refuse to start**, tell user to commit/stash
+4. Ensure the workflow's own artifacts are gitignored: check the project's `.gitignore` for `.claude/self-improve-state.md`, `.claude/self-improve-state.md.tmp`, and `.claude/worktrees/`. If any are missing AND the project has a `.gitignore`, append the missing entries with a comment like `# self-improve skill runtime artifacts`. If the project has no `.gitignore`, create one with these entries. This prevents the state file from being silently committed on the next `git add -A`.
 
 ## Workflow (per-iteration loop)
 
@@ -187,7 +188,7 @@ Any one triggers end-of-run:
 
 ## State file format
 
-Path: `.claude/self-improve-state.md` (gitignored by default — local automation state).
+Path: `.claude/self-improve-state.md` (auto-added to `.gitignore` during per-run setup — local automation state).
 
 ```markdown
 # Self-Improve State

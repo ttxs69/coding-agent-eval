@@ -45,7 +45,7 @@ Or type: `evolve`, `improve this project`, `auto-improve`.
 
 ## State
 
-Per-project memory at `.claude/self-improve-state.md` (gitignored). Tracks attempted and permanently-rejected candidates so repeated runs don't redo work. Safe to delete — the skill recreates from scratch.
+Per-project memory at `.claude/self-improve-state.md`. Tracks attempted and permanently-rejected candidates so repeated runs don't redo work. Safe to delete — the skill recreates from scratch. On first run (and any run where the entries are missing), the skill appends these paths to the project's `.gitignore` to prevent the state file from being committed.
 
 ## Spec & plan
 
