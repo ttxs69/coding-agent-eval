@@ -37,7 +37,8 @@ Or type: `evolve`, `improve this project`, `auto-improve`.
 
 ## What it won't do
 
-- Touch `.git/`, `.claude/`, `node_modules/`, lockfiles (except `deps` candidates)
+- Touch `.git/`, `node_modules/`, lockfiles (except `deps` candidates)
+- Modify your `.claude/` config (settings, commands, skills, hooks) — only its own state file + worktrees
 - Run external-state mutations (`git push`, `npm publish`, `terraform apply`, etc.)
 - Start with a dirty working tree (it'll refuse and ask you to commit/stash)
 - Push after merging (local-only by default)
