@@ -169,7 +169,8 @@ Any one triggers end-of-run:
 ## Safety rails
 
 **Never touch:**
-- `.git/`, `.claude/`
+- `.git/`
+- User / system config under `.claude/` — `settings.json`, `settings.local.json`, `commands/`, `skills/`, `agents/`, `hooks/`, `plugins/`. (Exception: this skill's own artifacts at `.claude/self-improve-state.md`, `.claude/self-improve-state.md.tmp`, and `.claude/worktrees/` are managed by the workflow itself.)
 - `node_modules/`, `.venv/`, `venv/`
 - `__pycache__/`, `dist/`, `build/`
 - Lockfiles (`uv.lock`, `package-lock.json`, `Cargo.lock`, `go.sum`) unless the candidate is explicitly a `deps` change
