@@ -130,12 +130,21 @@ def test_fixture_has_forward_looking_todo():
 
 
 def test_fixture_has_codebase_gap():
-    """Fixture source references a missing function (parallel-pattern gap)."""
+    """Fixture source references a function that's not yet defined (parallel-pattern gap).
+
+    Both halves matter: the function must be *referenced* (in docstrings or
+    comments — that's the forward signal) AND *not defined* (that's the gap).
+    A future contributor who implements the function should fail this test,
+    prompting them to update the fixture's forward signals.
+    """
     src = _read_source()
-    # The fixture references subtract/divide in docstrings or comments but
-    # does not define them — that's the parallel-pattern gap.
     referenced = re.findall(r"\b(subtract|divide|power|exponentiate)\b", src)
     assert referenced, (
         "no codebase gap (reference to a missing function like subtract/divide) "
         "in fixture source"
+    )
+    defined = re.findall(r"\bdef\s+(subtract|divide|power|exponentiate)\b", src)
+    assert not defined, (
+        f"codebase gap closed unexpectedly — these functions are now defined, "
+        f"so the fixture's forward signal is stale: {defined}"
     )
