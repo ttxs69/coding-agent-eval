@@ -26,7 +26,7 @@ Detect from project files; do **not** read CLAUDE.md for config:
 - **Language/runtime**: `pyproject.toml` → Python+uv; `package.json` → Node; `Cargo.toml` → Rust; `go.mod` → Go
 - **Test command**: derive from language (`uv run pytest`, `npm test`, `cargo test`, `go test ./...`). If none detected, the verify step skips test execution.
 - **Linters/type-checkers**: detect from config (`ruff`/`mypy` from pyproject; `eslint`/`tsc` from package.json; `clippy` for Rust)
-- **Default branch**: read via `git symbolic-ref refs/remotes/origin/HEAD`; fall back to `main`, then `master`. Used as merge target in step 10. **Never hardcode.**
+- **Default branch**: read via `git symbolic-ref refs/remotes/origin/HEAD`; fall back to `main`, then `master`, then `develop`. Used as merge target in step 10. **Never hardcode.** If none of those exist, ask the user which branch to merge into.
 - **Issue tracker**: if `gh` is available AND the project's remote is on GitHub, `gh issue list --state open` is a forward signal
 
 ## Per-run setup (once)
@@ -55,7 +55,7 @@ Synthesize signals into concrete feature candidates. Each candidate has:
 - **Title** (one line)
 - **Source** (which artifact(s) motivated it — for traceability)
 - **Scope estimate** (LOC range, "single PR worth" = ~50–300 LOC)
-- **Why-now** (why this is the right next step)
+- **Why-now** (why this is the right next step vs the other candidates — relative ranking helps the user pick)
 - **Risk** (low / medium / high — based on LOC, files touched, blast radius, deps, breaking changes)
 
 Filter out candidates matching anything in:
@@ -116,6 +116,8 @@ If review finds real issues: fix (one retry), then re-review. If still rejected,
 
 ### Step 9: Commit
 
+**Before committing**, verify no new dependencies were added to manifest files (`pyproject.toml`, `package.json`, `Cargo.toml`, `go.mod`) unless the user's pick explicitly authorized it (candidate Risk field noted the dep). If an unauthorized dep is present, abort as `skipped-other` with a policy-violation note — do not commit.
+
 Use `superpowers:finishing-a-development-branch` for guidance. Commit to the branch with a conventional-commit message:
 
 ```
@@ -147,7 +149,7 @@ Surface the branch with a one-line summary, then ask the user (use AskUserQuesti
 
 Update `.claude/self-improve-state.md` (see format below):
 - All proposed candidates (including unpicked) → *Proposed but not picked* with user reason where given
-- The picked + implemented candidate → *Attempted* with category=`feature` and appropriate status
+- The picked + implemented candidate → *Attempted* with category=`feature` and appropriate status. **For mid-iteration failures (plan-writing fails, implementation exceeds caps, policy-violation aborts) where no commit landed, still record the *Attempted* row with the Step 4 branch name and worktree path in the summary** — the worktree is left in place for inspection.
 - If user said "never propose this kind of change", move to *Permanently Rejected*
 
 Statuses: `merged` | `deferred` | `skipped-tests-failed` | `skipped-review-rejected` | `skipped-too-big` | `skipped-other`
