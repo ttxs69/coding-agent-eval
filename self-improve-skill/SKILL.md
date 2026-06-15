@@ -1,6 +1,6 @@
 ---
 name: self-improve
-description: Use when the user wants to autonomously improve a codebase. Scans for bugs, missing tests, refactors, doc gaps, dependency issues, perf, and security concerns. For each candidate, creates an isolated branch with verification + review, then asks the user whether to merge. Triggered by /self-improve or phrases like "improve this project", "self-evolve", "evolve", "auto-improve".
+description: Use when the user wants to proactively push a project forward by implementing its next feature. Reads project artifacts (specs' "future work" sections, README, TODOs, recent commit trajectory, codebase gaps), infers candidate features, asks the user to pick one, then implements it on an isolated branch with verification + review + merge-gate. Triggered by /self-improve or phrases like "implement next feature", "push project forward", "evolve".
 ---
 
 # Self-Improve
