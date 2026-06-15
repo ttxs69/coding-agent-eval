@@ -1,8 +1,8 @@
 """Sample package for self-improve skill testing.
 
-This module intentionally contains seeded issues the self-improve skill
-should detect. See self-improve-skill/tests/test_fixture_project.py for
-the catalog.
+This module intentionally contains seeded forward signals the self-improve
+skill should detect. See self-improve-skill/tests/test_fixture_project.py
+for the catalog.
 """
 
 
@@ -12,9 +12,19 @@ def add(a, b):
 
 
 def multiply(a, b):
+    """Multiply two numbers.
+
+    Pairs with `add`. The full basic-arithmetic set would also include
+    `subtract` and `divide` (not yet implemented — see Future work in
+    docs/superpowers/specs/2026-06-14-sample-design.md).
+    """
     # Has a test below (test_multiply_basic). Contrast with public_api_function,
     # which is the real "missing test" candidate the self-improve skill should find.
     return a * b
+
+
+# TODO: implement divide() — pairs with add/multiply but missing. See
+# Planned features in README and Future work in the design spec.
 
 
 # TODO(low priority): extract this into a shared helper. Both `sum_pair`
