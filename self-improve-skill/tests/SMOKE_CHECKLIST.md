@@ -1,58 +1,62 @@
-# Self-Improve Skill — Manual Smoke Checklist
+# Self-Improve Skill (Forward Mode) — Manual Smoke Checklist
 
 Run this after `scripts/install.sh` to verify the skill works end-to-end.
 Each item is a manual action — there's no way to automate "invoke skill in a real session".
 
 ## Setup
 
-- [ ] Run `sh self-improve-skill/scripts/install.sh`
+- [ ] From the repo root, run `sh self-improve-skill/scripts/install.sh`
 - [ ] Confirm `~/.claude/skills/self-improve/SKILL.md` exists
 - [ ] Start a new Claude Code session in `tests/fixtures/self-improve-sample-project/`
 - [ ] Initialize the fixture as a git repo: `git init && git add . && git commit -m initial`
 
-## Invocation
+## Inference
 
 - [ ] Type `/self-improve` — autocompletes or recognized as trigger
-- [ ] Skill activates (Claude begins the scan phase)
+- [ ] Skill reads: `docs/superpowers/specs/*.md` (Future work section), README (Planned features), forward-looking TODOs, recent commits, codebase gaps
+- [ ] Skill surfaces 3 candidate features at Gate 1
 
-## First run
+## Gate 1 (propose + pick)
 
-- [ ] Scan phase runs: linter/test/TODO scan all execute
-- [ ] Picks a candidate (likely the `add()` bug since it's a failing test = highest impact)
-- [ ] Creates worktree at `.claude/worktrees/<slug>/`
-- [ ] Creates branch `self-improve/bug/<slug>-<ts>`
-- [ ] Applies the fix (changes `a - b + 1` → `a + b`)
-- [ ] Runs tests in worktree — `test_add_basic` now passes
-- [ ] Runs review (uses requesting-code-review or self-review fallback)
-- [ ] Commits to branch
-- [ ] **Asks the user**: merge / defer / skip
+- [ ] Each candidate option shows: title, source, scope, why-now, risk
+- [ ] Risk callouts appear when applicable (adds-dep, schema-change, breaking)
+- [ ] Two non-candidate options present: "none of these, re-scan" and "stop"
+- [ ] User picks one (or re-scan or stop)
 
-## Merge paths
+## Implementation (after pick)
 
-- [ ] Choosing `merge`: switches to default branch, merges (FF if possible), deletes worktree + branch
-- [ ] Choosing `defer`: branch + worktree stay, iteration continues, summary lists the deferred branch
-- [ ] Choosing `skip`: branch stays, worktree deleted, marked in state as "left for manual"
+- [ ] Worktree created at `.claude/worktrees/<slug>/`
+- [ ] Branch `self-improve/feature/<slug>-<ts>` created
+- [ ] Brief plan written to `docs/superpowers/plans/<date>-<slug>.md` (5–15 tasks)
+- [ ] TDD: tests written first, then implementation
+- [ ] All affected tests pass
+- [ ] Linter clean
+- [ ] Code review runs (or inline self-review fallback if no review skill available)
+- [ ] Commit on branch with conventional-commit message
+
+## Gate 2 (merge)
+
+- [ ] Three-option prompt appears: merge / defer / skip
+- [ ] Choosing `merge`: switches to default branch, FF-merges (or `--no-ff`), deletes worktree + branch, does NOT push
+- [ ] Choosing `defer`: branch + worktree stay, iteration continues
+- [ ] Choosing `skip`: branch stays, worktree deleted, marked "left for manual" in state
 
 ## State file
 
 - [ ] `.claude/self-improve-state.md` exists after first iteration
-- [ ] Entry appended with correct format: `<ts> | <category> | <branch> | <status> | <summary>`
+- [ ] *Attempted* entry: `<ts> | feature | <branch> | <status> | <summary>`
+- [ ] *Proposed but not picked* entries: one per candidate surfaced at Gate 1 (including the picked one is NOT in this section — it's in *Attempted*)
 - [ ] File is gitignored (run `git status` — should not appear)
 
-## Re-run
+## Re-run behavior
 
-- [ ] Second `/self-improve` invocation: skips candidates matching state file entries
-- [ ] Eventually exits with "no candidates found" or hits max iterations
+- [ ] Second `/self-improve` invocation: candidates previously proposed are NOT re-surfaced
+- [ ] Merged features are NOT re-attempted
 
-## Interrupt
+## Edge cases
 
-- [ ] Start a run, press Ctrl-C (or Escape) mid-iteration
-- [ ] Worktree cleaned up
-- [ ] Partial state written
-- [ ] Summary of completed iterations printed
-
-## Dirty tree
-
-- [ ] Make an uncommitted change in the fixture
-- [ ] Invoke `/self-improve`
-- [ ] Verify it refuses with a clear "commit or stash first" message
+- [ ] Dirty tree at start: skill refuses with clear "commit or stash first" message
+- [ ] Re-scan 3 times consecutively: skill stops with "couldn't find anything you want"
+- [ ] Ctrl-C mid-iteration: worktree cleaned up, partial state written
+- [ ] Implementation exceeds 500-LOC or 8-file cap: aborted as `skipped-too-big`
+- [ ] Implementation needs a new dep on a "low risk" candidate: aborted as `skipped-other` with policy-violation note

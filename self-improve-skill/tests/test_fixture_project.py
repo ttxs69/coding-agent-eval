@@ -7,6 +7,7 @@ seeded issues the skill is supposed to find. Run via:
 from __future__ import annotations
 
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -91,4 +92,59 @@ def test_fixture_test_command_fails_on_seeded_bug():
     assert "test_add_basic" in result.stdout, (
         f"expected failure to mention test_add_basic (the seeded bug);\n"
         f"stdout:\n{result.stdout}"
+    )
+
+
+def test_fixture_has_future_work_section():
+    """Fixture has a design spec with a 'Future work' section."""
+    spec_dir = FIXTURE / "docs" / "superpowers" / "specs"
+    assert spec_dir.is_dir(), f"no docs/superpowers/specs/ dir in fixture: {spec_dir}"
+    spec_files = list(spec_dir.glob("*.md"))
+    assert spec_files, "no design spec files in fixture's docs/superpowers/specs/"
+    found = False
+    for spec_file in spec_files:
+        text = spec_file.read_text()
+        if "future work" in text.lower():
+            found = True
+            break
+    assert found, "no 'Future work' section in any fixture spec file"
+
+
+def test_fixture_has_planned_features_in_readme():
+    """Fixture README has a 'Planned features' section."""
+    readme = (FIXTURE / "README.md").read_text()
+    assert "planned features" in readme.lower(), (
+        "fixture README missing 'Planned features' section"
+    )
+
+
+def test_fixture_has_forward_looking_todo():
+    """A forward-looking TODO (TODO: implement X) exists in the fixture source."""
+    src = _read_source()
+    forward_todos = re.findall(
+        r"TODO[^)]*\bimplement\b\s+\w+", src, re.IGNORECASE
+    )
+    assert forward_todos, (
+        "no forward-looking TODO (TODO: implement X) in fixture source"
+    )
+
+
+def test_fixture_has_codebase_gap():
+    """Fixture source references a function that's not yet defined (parallel-pattern gap).
+
+    Both halves matter: the function must be *referenced* (in docstrings or
+    comments — that's the forward signal) AND *not defined* (that's the gap).
+    A future contributor who implements the function should fail this test,
+    prompting them to update the fixture's forward signals.
+    """
+    src = _read_source()
+    referenced = re.findall(r"\b(subtract|divide|power|exponentiate)\b", src)
+    assert referenced, (
+        "no codebase gap (reference to a missing function like subtract/divide) "
+        "in fixture source"
+    )
+    defined = re.findall(r"\bdef\s+(subtract|divide|power|exponentiate)\b", src)
+    assert not defined, (
+        f"codebase gap closed unexpectedly — these functions are now defined, "
+        f"so the fixture's forward signal is stale: {defined}"
     )

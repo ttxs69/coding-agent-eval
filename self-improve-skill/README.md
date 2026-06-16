@@ -1,21 +1,25 @@
 # self-improve
 
-A Claude Code skill that autonomously scans a project for improvements and applies each as an isolated, verified, reviewed branch — then asks the user whether to merge.
+A Claude Code skill that proactively pushes a project forward by implementing its next feature. Reads project artifacts, infers candidate features, asks you to pick one, then implements it on an isolated branch — with verification, review, and a merge gate.
 
 ## What it does
 
-When you invoke `/self-improve` (or say "evolve", "improve this project", etc.), the skill:
+When you invoke `/self-improve` (or say "implement next feature", "push project forward", "evolve"), the skill:
 
-1. Scans for bugs, missing tests, refactors, doc gaps, dependency issues, perf, and security concerns
-2. Picks the highest-impact candidate
-3. Creates an isolated git worktree + branch
-4. Applies the fix using the matching skill (systematic-debugging / TDD / simplify)
-5. Verifies (tests + linters)
-6. Reviews (code-review skill)
-7. Commits to the branch
-8. **Asks you whether to merge** — `merge` / `defer` / `skip`
-9. Records the outcome in `.claude/self-improve-state.md`
-10. Loops until stopped (no candidates / max 10 iter / 3 consecutive failures / 500K tokens / 30 min / interrupt)
+1. Reads project artifacts: specs' "future work" sections, README, forward-looking TODOs, recent commits, codebase gaps, open issues
+2. Infers 3 candidate features with title / source / scope / why-now / risk
+3. **Asks you to pick one** (or re-scan or stop) — *Gate 1*
+4. Creates an isolated git worktree + branch
+5. Drafts a brief plan to `docs/superpowers/plans/`
+6. Implements via TDD (dispatches subagents for features >200 LOC)
+7. Verifies (tests + linters)
+8. Reviews (code-review skill or self-review fallback)
+9. Commits to the branch
+10. **Asks you whether to merge** — merge / defer / skip — *Gate 2*
+11. Records the outcome in `.claude/self-improve-state.md` (also records unpicked proposals, so they don't resurface)
+12. Loops until stopped
+
+Bug-fixing is incidental — if a feature implementation surfaces a bug, the skill fixes it as part of the feature. Standalone bug-sweep candidates are not generated.
 
 ## Install
 
@@ -23,31 +27,50 @@ When you invoke `/self-improve` (or say "evolve", "improve this project", etc.),
 sh self-improve-skill/scripts/install.sh
 ```
 
-This symlinks `self-improve-skill/` to `~/.claude/skills/self-improve/`. Safe to re-run.
+Symlinks `self-improve-skill/` to `~/.claude/skills/self-improve/`. Safe to re-run.
 
 ## Invoke
-
-In any project, in a Claude Code session:
 
 ```
 /self-improve
 ```
 
-Or type: `evolve`, `improve this project`, `auto-improve`.
+Or type: `implement next feature`, `push project forward`, `evolve`.
 
 ## What it won't do
 
-- Touch `.git/`, `node_modules/`, lockfiles (except `deps` candidates)
+- Touch `.git/`, `node_modules/`, lockfiles (unless a candidate's Risk field notes a dep add AND you picked it)
 - Modify your `.claude/` config (settings, commands, skills, hooks) — only its own state file + worktrees
 - Run external-state mutations (`git push`, `npm publish`, `terraform apply`, etc.)
 - Start with a dirty working tree (it'll refuse and ask you to commit/stash)
 - Push after merging (local-only by default)
+- Add new dependencies, change schemas, or make breaking API/CLI changes unless the candidate's Risk field noted it AND you picked it
+- Implement features >500 LOC or >8 files in one iteration (auto-aborted as `skipped-too-big`)
 
 ## State
 
-Per-project memory at `.claude/self-improve-state.md`. Tracks attempted and permanently-rejected candidates so repeated runs don't redo work. Safe to delete — the skill recreates from scratch. On first run (and any run where the entries are missing), the skill appends these paths to the project's `.gitignore` to prevent the state file from being committed.
+Per-project memory at `.claude/self-improve-state.md` (gitignored). Three sections:
+
+- **Attempted** — every picked+implemented feature with outcome (`merged` / `deferred` / `skipped-*`)
+- **Proposed but not picked** — every candidate ever surfaced at Gate 1, so they don't resurface next run
+- **Permanently Rejected** — ideas you've explicitly said "never propose"
+
+On first run (and any run where the entries are missing), the skill appends these paths to the project's `.gitignore`.
+
+Legacy entries from the v1 reactive skill (categories like `bug`, `docs`, etc.) remain in the file for history but are ignored for candidate matching.
+
+## Stopping criteria
+
+- You pick "stop" at Gate 1
+- You re-scan 3 times without picking
+- Max 10 iterations per run
+- 3 consecutive failures (tests-fail / review-reject / too-big / policy-violation)
+- 500K token budget
+- 30 min wall-clock
+- You interrupt (Ctrl-C / Escape)
 
 ## Spec & plan
 
-- Spec: `docs/superpowers/specs/2026-06-14-self-improve-skill-design.md`
-- Plan: `docs/superpowers/plans/2026-06-14-self-improve-skill.md`
+- Spec: `docs/superpowers/specs/2026-06-14-self-improve-forward-pivot-design.md`
+- Original v1 spec (reactive mode, replaced): `docs/superpowers/specs/2026-06-14-self-improve-skill-design.md`
+- Pivot plan: `docs/superpowers/plans/2026-06-14-self-improve-forward-pivot.md`

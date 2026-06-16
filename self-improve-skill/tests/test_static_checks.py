@@ -59,7 +59,7 @@ def test_description_contains_trigger_words():
 def test_description_mentions_categories():
     fm = parse_frontmatter(SKILL_MD.read_text())
     desc = fm.get("description", "").lower()
-    for category in ("bug", "test", "refactor"):
+    for category in ("feature", "next", "forward"):
         assert category in desc, (
             f"description missing category {category!r}: {desc!r}"
         )
