@@ -145,9 +145,9 @@ def test_started_at_reflects_run_start_not_result_assembly(
     minutes after it actually began — useless for ordering or correlating
     with logs.
 
-    The harness has `_record_run_start()` (called at the top of `run()`)
-    and `_get_run_started_at()` for this exact purpose. This test pins
-    that the consumer (`_result()`) actually uses the captured time."""
+    The harness captures this at the top of `run()` (via `_utc_now_iso()`)
+    and threads it through to `_result()` as a local. This test pins that
+    the consumer actually uses the captured time, not a fresh `now` call."""
     # Return distinct, increasing timestamps so we can tell which call
     # sourced started_at.
     counter = {"n": 0}
@@ -155,8 +155,6 @@ def test_started_at_reflects_run_start_not_result_assembly(
         counter["n"] += 1
         return f"T{counter['n']:03d}"
     monkeypatch.setattr("cae.harness._utc_now_iso", fake_now_iso)
-    # Reset module-level cache so prior tests don't leak in.
-    monkeypatch.setattr("cae.harness._run_started_at", None)
 
     repo_src = tiny_task_path / "repo"
     workdir = tmp_path / "workdir"
@@ -169,14 +167,94 @@ def test_started_at_reflects_run_start_not_result_assembly(
 
     result = run(task_path=tiny_task_path, agent_name="mock", workdir=workdir)
 
-    # The first _utc_now_iso() call happens inside _record_run_start() at
-    # the top of run(); that's the value started_at must reflect. If the
-    # value is a later T-number, _result() is calling _utc_now_iso()
-    # directly instead of _get_run_started_at().
+    # The first _utc_now_iso() call happens at the top of run(); that's
+    # the value started_at must reflect. If the value is a later T-number,
+    # _result() is calling _utc_now_iso() directly instead of using the
+    # captured `started_at` parameter.
     assert result["started_at"] == "T001", (
-        f"started_at should be the first captured timestamp (T001, when "
-        f"_record_run_start() ran), not {result['started_at']!r}. "
-        f"_result() must call _get_run_started_at(), not _utc_now_iso()."
+        f"started_at should be the first captured timestamp (T001, "
+        f"captured at the top of run()), not {result['started_at']!r}."
+    )
+
+
+def test_started_at_independent_across_concurrent_runs(
+    tmp_path, tiny_task_path, monkeypatch,
+):
+    """Two runs that overlap in time must each report their OWN started_at,
+    not the most-recent value written by any thread. Under a module-global
+    implementation, the later run's start timestamp clobbers the earlier
+    run's value before the earlier run's `_result()` reads it back.
+
+    Mocks `_utc_now_iso()` with a counter so each call returns a distinct
+    `T001`, `T002`, ... value. Threads two `run()` calls with worker 1
+    delayed enough to force overlap. Under the racy global, both results
+    would carry the LATER T-value; under the local-var refactor, each
+    result carries its OWN first-call value.
+    """
+    import threading
+    import time
+    import shutil as _shutil
+    from cae.harness import run as harness_run
+
+    counter = {"n": 0}
+    counter_lock = threading.Lock()
+
+    def fake_now_iso():
+        with counter_lock:
+            counter["n"] += 1
+            return f"T{counter['n']:03d}"
+
+    monkeypatch.setattr("cae.harness._utc_now_iso", fake_now_iso)
+
+    # Two task dirs with distinct instance_ids (so result filenames don't collide).
+    tasks_dir = tmp_path / "tasks"
+    task_paths = []
+    for name in ("tiny__task-A", "tiny__task-B"):
+        t = tasks_dir / name
+        (t / "repo").mkdir(parents=True)
+        (t / "task.json").write_text(
+            (tiny_task_path / "task.json").read_text().replace('"tiny__task-1"', f'"{name}"'))
+        for child in (tiny_task_path / "repo").iterdir():
+            dest = t / "repo" / child.name
+            if child.is_dir():
+                _shutil.copytree(child, dest)
+            else:
+                _shutil.copy2(child, dest)
+        task_paths.append(t)
+
+    results: list[dict | None] = [None, None]
+    errors: list[Exception | None] = [None, None]
+
+    def worker(idx, pre_delay):
+        try:
+            time.sleep(pre_delay)
+            results[idx] = harness_run(
+                task_path=task_paths[idx],
+                agent_name="mock",
+                workdir=tmp_path / f"wd{idx}",
+                timeout_sec=30,
+            )
+        except Exception as e:
+            errors[idx] = e
+
+    t1 = threading.Thread(target=worker, args=(0, 0.0))
+    t2 = threading.Thread(target=worker, args=(1, 0.05))
+    t1.start()
+    t2.start()
+    t1.join()
+    t2.join()
+
+    assert errors[0] is None, f"worker 0 raised: {errors[0]!r}"
+    assert errors[1] is None, f"worker 1 raised: {errors[1]!r}"
+    assert results[0] is not None and results[1] is not None
+
+    # Each result's started_at must be the value _utc_now_iso() returned at
+    # the top of THIS run() — i.e., the two values must differ. Under the
+    # racy global, both would carry whichever thread wrote last.
+    assert results[0]["started_at"] != results[1]["started_at"], (
+        f"both runs reported the same started_at ({results[0]['started_at']!r}) "
+        f"— suggests a shared global is being clobbered across concurrent "
+        f"run() calls."
     )
 
 

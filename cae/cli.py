@@ -204,30 +204,42 @@ def cmd_run(args: argparse.Namespace) -> int:
         with budget_lock:
             if max_cost is not None and spent_box[0] > max_cost:
                 return ("skip", instance_id, repeat_index, 0.0, "")
-        cost, output = _execute_run_unit(
-            task_path=task_path,
-            agent_name=args.agent,
-            instance_id=instance_id,
-            safe_model=safe_model,
-            repeat=repeat,
-            repeat_index=repeat_index,
-            results_dir=results_dir,
-            workdir=workdir,
-            timeout_sec=args.timeout * 60,
-            fetch_fresh=args.fetch_fresh,
-            keep_workdir=args.keep_workdir,
-            docker=args.docker,
-            docker_image=args.docker_image,
-            env_file=env_file,
-            docker_network=args.docker_network,
-            docker_extra_mounts=docker_extra_mounts,
-            model=args.model,
-            force=args.force,
-        )
+        try:
+            cost, output = _execute_run_unit(
+                task_path=task_path,
+                agent_name=args.agent,
+                instance_id=instance_id,
+                safe_model=safe_model,
+                repeat=repeat,
+                repeat_index=repeat_index,
+                results_dir=results_dir,
+                workdir=workdir,
+                timeout_sec=args.timeout * 60,
+                fetch_fresh=args.fetch_fresh,
+                keep_workdir=args.keep_workdir,
+                docker=args.docker,
+                docker_image=args.docker_image,
+                env_file=env_file,
+                docker_network=args.docker_network,
+                docker_extra_mounts=docker_extra_mounts,
+                model=args.model,
+                force=args.force,
+            )
+        except BaseException as e:
+            # The harness is supposed to return task_error / agent_error
+            # as statuses rather than raise, but "supposed to" isn't
+            # "guaranteed to" — malformed task.json, OS errors, and
+            # similar can still raise. Don't let one unit's exception
+            # abort the loop and lose other workers' output. KeyboardInterrupt
+            # must propagate so Ctrl-C still works.
+            if isinstance(e, KeyboardInterrupt):
+                raise
+            return ("error", instance_id, repeat_index, repr(e), "")
         with budget_lock:
             spent_box[0] += cost
         return ("ok", instance_id, repeat_index, cost, output)
 
+    had_error = False
     with ThreadPoolExecutor(max_workers=parallel) as pool:
         # The harness returns task_error / agent_error as result statuses
         # rather than raising, so a failing unit doesn't poison the pool.
@@ -238,6 +250,12 @@ def cmd_run(args: argparse.Namespace) -> int:
                 if tag == "skip":
                     print(f"[{instance_id}] skipped: budget exhausted")
                     continue
+                if tag == "error":
+                    had_error = True
+                    suffix = f" (repeat {repeat_index})" if repeat_index is not None else ""
+                    print(f"--- {instance_id}{suffix} WORKER ERROR: {cost} ---",
+                          file=sys.stderr)
+                    continue
                 suffix = f" (repeat {repeat_index})" if repeat_index is not None else ""
                 print(f"--- {instance_id}{suffix} (cost ${cost:.4f}) ---")
                 if output:
@@ -246,6 +264,8 @@ def cmd_run(args: argparse.Namespace) -> int:
                     with budget_lock:
                         cur = spent_box[0]
                     print(f"total spent: ${cur:.4f} / max ${max_cost:.4f}")
+    if had_error:
+        return 1
     return 0
 
 

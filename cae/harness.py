@@ -36,23 +36,6 @@ def _utc_now_iso() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
-_run_started_at: str | None = None
-
-
-def _record_run_start() -> str:
-    """Capture the wall-clock time the run started. Called at the top of
-    `run()` so the result's `started_at` reflects the actual run start,
-    not the time the result dict was assembled (which can be minutes
-    later for long-running tasks)."""
-    global _run_started_at
-    _run_started_at = _utc_now_iso()
-    return _run_started_at
-
-
-def _get_run_started_at() -> str:
-    return _run_started_at or _utc_now_iso()
-
-
 def _run_id_for_now() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H-%M-%S")
 
@@ -201,7 +184,12 @@ def run(
     fail_to_pass = task["fail_to_pass"]
     pass_to_pass = task["pass_to_pass"]
     mode = "docker" if docker else "local"
-    _record_run_start()  # capture wall-clock for the result's started_at
+    # Capture wall-clock for the result's `started_at` at the top of run(),
+    # so it reflects the actual run start (not result-assembly time, which
+    # can be minutes later for long agent runs). Threaded as a local so
+    # concurrent run() calls don't clobber each other's timestamp via a
+    # shared module global.
+    started_at = _utc_now_iso()
 
     # 1-3: Resolve task, create workdir, fetch repo
     workdir_owned = workdir is None
@@ -250,7 +238,7 @@ def run(
         return _result(task, agent_name, mode, Status.TASK_ERROR, agent_version, {}, {}, "", str(workdir),
                        f"could not apply tests.patch — workdir is empty (use --fetch-fresh or "
                        f"run without --no-fetch-repo). Patch: {task_dir / 'tests.patch'}",
-                       agent_model=agent_model)
+                       started_at=started_at, agent_model=agent_model)
 
     # Pick a subprocess runner: local (default) or docker (one container, multiple execs).
     # In docker mode, start ONE container and exec into it for each step so state
@@ -290,7 +278,7 @@ def run(
             # when --keep-workdir is passed).
             err_blob = (setup_err or "") + (setup_out or "")
             return _result(task, agent_name, mode, Status.TASK_ERROR, agent_version, {}, {}, "", str(workdir),
-                           f"setup_cmd failed (rc={setup_rc}): {err_blob[:5000]}", agent_model=agent_model)
+                           f"setup_cmd failed (rc={setup_rc}): {err_blob[:5000]}", started_at=started_at, agent_model=agent_model)
 
     # 6: Pre-flight
     pre = _run_tests(task["test_cmd"], workdir, timeout=timeout_sec, run_subprocess=run_step)
@@ -319,22 +307,22 @@ def run(
             details.append(f"{len(passed_f2p)} fail_to_pass tests passed (task already fixed?)")
         msg = "pre-flight validation failed: " + "; ".join(details) if details else "pre-flight validation failed"
         return _result(task, agent_name, mode, Status.TASK_ERROR, agent_version, pre_flight, pre_flight, "",
-                       str(workdir), msg, agent_model=agent_model)
+                       str(workdir), msg, started_at=started_at, agent_model=agent_model)
 
     # 7: Run agent
     if not adapter.is_available():
         return _result(task, agent_name, mode, Status.AGENT_ERROR, agent_version, pre_flight, pre_flight, "",
-                       str(workdir), f"agent {agent_name} not available", agent_model=agent_model)
+                       str(workdir), f"agent {agent_name} not available", started_at=started_at, agent_model=agent_model)
     cmd = adapter.build_command(workdir, task["prompt"], model=model)
     agent_rc, agent_stdout, agent_stderr, duration = run_step(cmd, workdir, timeout=timeout_sec)
     if agent_rc == -1:
         return _result(task, agent_name, mode, Status.TIMEOUT, agent_version, pre_flight, pre_flight, "",
-                       str(workdir), f"agent timed out after {timeout_sec}s", agent_model=agent_model)
+                       str(workdir), f"agent timed out after {timeout_sec}s", started_at=started_at, agent_model=agent_model)
     parsed = adapter.parse_output(agent_stdout, agent_stderr, agent_rc)
     if parsed.exit_code != 0:
         return _result(task, agent_name, mode, Status.AGENT_ERROR, agent_version, pre_flight, pre_flight, "",
                        str(workdir), f"agent exited non-zero: {parsed.exit_code}",
-                       agent_model=parsed.usage.model or agent_model)
+                       started_at=started_at, agent_model=parsed.usage.model or agent_model)
 
     # 8: Capture patch
     diff_proc = subprocess.run(["git", "diff"], cwd=workdir, capture_output=True, text=True)
@@ -357,12 +345,12 @@ def run(
         shutil.rmtree(workdir, ignore_errors=True)
 
     return _result(task, agent_name, mode, status, agent_version, pre_flight, post_flight, patch,
-                   str(workdir), "", agent_model=parsed.usage.model or agent_model,
+                   str(workdir), "", started_at=started_at, agent_model=parsed.usage.model or agent_model,
                    agent_duration=duration, agent_usage=parsed.usage, repeat=repeat, repeat_index=repeat_index)
 
 
 def _result(task, agent_name, mode, status, agent_version, pre_flight, post_flight, patch,
-            workdir, error, agent_model=None, agent_duration=0.0, agent_usage=None,
+            workdir, error, started_at: str, agent_model=None, agent_duration=0.0, agent_usage=None,
             prompt: str | None = None,
             repeat: int = 1, repeat_index: int | None = None):
     """Build a result dict in the spec's Output JSON shape."""
@@ -380,7 +368,7 @@ def _result(task, agent_name, mode, status, agent_version, pre_flight, post_flig
         "model": agent_model,
         "mode": mode,
         "status": status.value,
-        "started_at": _get_run_started_at(),
+        "started_at": started_at,
         "duration_sec": agent_duration,
         "harness_git_sha": _git_sha_cached(),
         "task_source": task.get("source"),

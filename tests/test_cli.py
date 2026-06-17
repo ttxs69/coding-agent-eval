@@ -506,3 +506,83 @@ def test_cae_run_parallel_isolates_task_errors(tmp_path, tiny_task_path):
     broken_file = next(f for f in (proj / "results").glob("*__mock__*tiny__broken*.json"))
     broken_data = json.loads(broken_file.read_text())
     assert broken_data["status"] == "task_error", broken_data["status"]
+
+
+def test_cae_run_parallel_continues_after_unexpected_worker_exception(tmp_path, tiny_task_path):
+    """If a worker raises UNEXPECTEDLY (not task_error — a real exception
+    like KeyError on a malformed task.json), the loop must catch it, log
+    it, and continue processing the other workers' results. The healthy
+    task's `wrote <path>` / `status:` output must still appear on stdout,
+    and the CLI must exit non-zero.
+
+    Under the old (uncaught) code, the first worker's exception exits the
+    as_completed loop immediately, so any workers that finish later never
+    get their output printed.
+    """
+    proj = tmp_path
+    tasks_dir = proj / "tasks"
+
+    # Healthy task with a slow setup_cmd so it finishes AFTER the broken
+    # task has already raised. This forces the order: broken-fails-first,
+    # healthy-finishes-second. Under the old code, the broken task's
+    # exception would exit the loop before the healthy task's output is
+    # iterated.
+    healthy = tasks_dir / "tiny__task-1"
+    (healthy / "repo").mkdir(parents=True)
+    healthy_json = json.loads((tiny_task_path / "task.json").read_text())
+    healthy_json["setup_cmd"] = "sleep 1"  # ensure healthy finishes second
+    (healthy / "task.json").write_text(json.dumps(healthy_json))
+    for child in (tiny_task_path / "repo").iterdir():
+        dest = healthy / "repo" / child.name
+        if child.is_dir():
+            shutil.copytree(child, dest)
+        else:
+            shutil.copy2(child, dest)
+
+    # Broken task: malformed task.json (missing required 'fail_to_pass').
+    # The harness's run() does `fail_to_pass = task["fail_to_pass"]` near
+    # the top, raising KeyError before any setup_cmd runs — so this fails
+    # FAST, before the healthy task finishes its 1s sleep.
+    broken = tasks_dir / "tiny__broken"
+    (broken / "repo").mkdir(parents=True)
+    bad_json = json.loads((tiny_task_path / "task.json").read_text())
+    del bad_json["fail_to_pass"]
+    bad_json["instance_id"] = "tiny__broken"
+    (broken / "task.json").write_text(json.dumps(bad_json))
+    for child in (tiny_task_path / "repo").iterdir():
+        dest = broken / "repo" / child.name
+        if child.is_dir():
+            shutil.copytree(child, dest)
+        else:
+            shutil.copy2(child, dest)
+
+    (proj / "results").mkdir()
+
+    result = subprocess.run(
+        [sys.executable, "-m", "cae", "run", "--agent", "mock",
+         "--task", "tiny__task-1", "--task", "tiny__broken",
+         "--parallel", "2",
+         "--tasks-dir", str(tasks_dir),
+         "--results-dir", str(proj / "results")],
+        capture_output=True, text=True, timeout=60,
+    )
+
+    # The healthy task's result file must be on disk (pool.__exit__ waits).
+    assert any("tiny__task-1" in f.name for f in (proj / "results").glob("*.json")), (
+        f"healthy task result missing; stderr: {result.stderr}"
+    )
+    # Exit code must be non-zero — one unit raised unexpectedly.
+    assert result.returncode != 0, (
+        f"expected non-zero exit, got {result.returncode}; stdout: {result.stdout}"
+    )
+    # The healthy task's output must STILL be visible on stdout even though
+    # the broken task raised first. Under the old code, the loop exits on
+    # the first exception and the healthy task's `wrote` line is never printed.
+    assert "wrote" in result.stdout and "status:" in result.stdout, (
+        f"healthy task's output not printed; stdout: {result.stdout}\n"
+        f"stderr: {result.stderr}"
+    )
+    # The error must be visible somewhere.
+    assert "fail_to_pass" in result.stderr or "KeyError" in result.stderr, (
+        f"expected error mentioning fail_to_pass; stderr: {result.stderr}"
+    )
