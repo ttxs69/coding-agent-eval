@@ -342,7 +342,7 @@ def test_execute_run_unit_writes_result_and_returns_cost(tmp_path, tiny_task_pat
     effective_model = _resolve_effective_model("mock", None)
     safe_model = _safe_model_for_filename(effective_model)
 
-    cost = _execute_run_unit(
+    cost, output = _execute_run_unit(
         task_path=task_path,
         agent_name="mock",
         instance_id=task_slug,
@@ -363,8 +363,90 @@ def test_execute_run_unit_writes_result_and_returns_cost(tmp_path, tiny_task_pat
         force=False,
     )
     assert cost == 0.0  # mock has no cost
+    assert isinstance(output, str)
+    assert "wrote" in output
+    assert "status:" in output
     files = list(results_dir.glob("*.json"))
     assert len(files) == 1
     data = json.loads(files[0].read_text())
     assert data["agent"] == "mock"
     assert data["task_id"] == "tiny__task-1"
+
+
+def test_cae_run_parallel_produces_all_results(tmp_path, tiny_task_path):
+    """`--task A --task B --parallel 2` produces two result files."""
+    proj = tmp_path
+    tasks_dir = proj / "tasks"
+    for name in ("tiny__task-1", "tiny__task-2"):
+        t = tasks_dir / name
+        (t / "repo").mkdir(parents=True)
+        (t / "task.json").write_text(
+            (tiny_task_path / "task.json").read_text().replace('"tiny__task-1"', f'"{name}"'))
+        for child in (tiny_task_path / "repo").iterdir():
+            dest = t / "repo" / child.name
+            if child.is_dir():
+                shutil.copytree(child, dest)
+            else:
+                shutil.copy2(child, dest)
+    (proj / "results").mkdir()
+
+    result = subprocess.run(
+        [sys.executable, "-m", "cae", "run", "--agent", "mock",
+         "--task", "tiny__task-1", "--task", "tiny__task-2",
+         "--parallel", "2",
+         "--tasks-dir", str(tasks_dir),
+         "--results-dir", str(proj / "results")],
+        capture_output=True, text=True, timeout=60,
+    )
+    assert result.returncode == 0, f"stderr: {result.stderr}"
+    result_files = [f for f in (proj / "results").glob("*.json") if "__mock__" in f.name]
+    assert len(result_files) == 2, (
+        f"expected 2 result files, got {len(result_files)}: {[f.name for f in result_files]}"
+    )
+
+
+def test_cae_run_parallel_is_concurrent(tmp_path, tiny_task_path):
+    """When --parallel=N, N units run concurrently. We verify by injecting a
+    sleep into setup_cmd so each unit takes ~1s, then checking that
+    total wall time for parallel-3 is meaningfully faster than serial-1.
+    """
+    import time
+
+    proj = tmp_path
+    tasks_dir = proj / "tasks"
+    for name in ("tiny__task-1", "tiny__task-2", "tiny__task-3"):
+        t = tasks_dir / name
+        (t / "repo").mkdir(parents=True)
+        task_json = json.loads((tiny_task_path / "task.json").read_text())
+        task_json["instance_id"] = name
+        task_json["setup_cmd"] = "sleep 1"
+        (t / "task.json").write_text(json.dumps(task_json))
+        for child in (tiny_task_path / "repo").iterdir():
+            dest = t / "repo" / child.name
+            if child.is_dir():
+                shutil.copytree(child, dest)
+            else:
+                shutil.copy2(child, dest)
+    (proj / "results").mkdir()
+
+    def run_cae(parallel: int) -> float:
+        start = time.monotonic()
+        result = subprocess.run(
+            [sys.executable, "-m", "cae", "run", "--agent", "mock",
+             "--task", "tiny__task-1", "--task", "tiny__task-2", "--task", "tiny__task-3",
+             "--parallel", str(parallel),
+             "--tasks-dir", str(tasks_dir),
+             "--results-dir", str(proj / "results"),
+             "--force"],
+            capture_output=True, text=True, timeout=120,
+        )
+        assert result.returncode == 0, f"stderr: {result.stderr}"
+        return time.monotonic() - start
+
+    serial = run_cae(1)
+    parallel = run_cae(3)
+    # 3 units @ ~1s each. Serial ~3s+overhead; parallel-3 ~1s+overhead.
+    # Allow generous slack — assert parallel is at least 40% faster than serial.
+    assert parallel < serial * 0.6, (
+        f"parallel ({parallel:.1f}s) not meaningfully faster than serial ({serial:.1f}s)"
+    )
