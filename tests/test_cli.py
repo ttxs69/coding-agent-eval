@@ -280,3 +280,39 @@ def test_cae_run_docker_flag_rejected_by_docker_check(tmp_path, tiny_task_path):
     # If docker was missing, the run should fail with an error about docker
     if result.returncode != 0:
         assert "docker" in result.stderr.lower() or result.returncode == 2
+
+
+def test_cae_run_accepts_multiple_tasks_and_parallel_flag(tmp_path, tiny_task_path):
+    """`--task foo --task bar --parallel 3` is accepted by argparse (does NOT
+    yet run them in parallel — that comes later). Verifies the CLI surface
+    before any run logic changes.
+    """
+    proj = tmp_path
+    tasks_dir = proj / "tasks"
+    for name in ("tiny__task-1", "tiny__task-2"):
+        t = tasks_dir / name
+        (t / "repo").mkdir(parents=True)
+        (t / "task.json").write_text(
+            (tiny_task_path / "task.json").read_text().replace('"tiny__task-1"', f'"{name}"'))
+        for child in (tiny_task_path / "repo").iterdir():
+            dest = t / "repo" / child.name
+            if child.is_dir():
+                shutil.copytree(child, dest)
+            else:
+                shutil.copy2(child, dest)
+    (proj / "results").mkdir()
+
+    result = subprocess.run(
+        [sys.executable, "-m", "cae", "run", "--agent", "mock",
+         "--task", "tiny__task-1", "--task", "tiny__task-2",
+         "--parallel", "3",
+         "--tasks-dir", str(tasks_dir),
+         "--results-dir", str(proj / "results")],
+        capture_output=True, text=True,
+    )
+    # We only assert argparse acceptance here — exit code 0 OR a runtime error
+    # is fine, but NOT an argparse error (exit code 2 with "unrecognized" /
+    # "invalid choice" wording).
+    assert result.returncode != 2 or "unrecognized arguments" not in result.stderr, (
+        f"argparse rejected the new flags: {result.stderr}"
+    )
