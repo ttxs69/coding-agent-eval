@@ -61,6 +61,7 @@ def _execute_run_unit(
     docker_extra_mounts: list[tuple[str, str]] | None,
     model: str | None,
     force: bool,
+    dry_run: bool = False,
 ) -> tuple[float, str]:
     """Run ONE (task, repeat_index) pair end-to-end.
 
@@ -95,6 +96,7 @@ def _execute_run_unit(
         model=model,
         repeat=repeat,
         repeat_index=repeat_index,
+        dry_run=dry_run,
     )
     out = results_dir / f"{result['run_id']}.json"
     out.write_text(json.dumps(result, indent=2, default=str))
@@ -174,6 +176,7 @@ def cmd_run(args: argparse.Namespace) -> int:
                 docker_extra_mounts=docker_extra_mounts,
                 model=args.model,
                 force=args.force,
+                dry_run=args.dry_run,
             )
             if output:
                 print(output)
@@ -224,6 +227,7 @@ def cmd_run(args: argparse.Namespace) -> int:
                 docker_extra_mounts=docker_extra_mounts,
                 model=args.model,
                 force=args.force,
+                dry_run=args.dry_run,
             )
         except BaseException as e:
             # The harness is supposed to return task_error / agent_error
@@ -498,6 +502,11 @@ def build_parser() -> argparse.ArgumentParser:
                            "workers (default: 1 = serial). When >1, per-unit stdout is "
                            "buffered and printed atomically at completion. Budget cap "
                            "(--max-cost-usd) is best-effort under parallelism.")
+    p_run.add_argument("--dry-run", action="store_true",
+                      help="resolve task, run setup + pre-flight, build the agent command, "
+                           "then stop — write a result with status='dry_run' and the "
+                           "would-be command. No API tokens spent. Useful for sanity-checking "
+                           "before a --parallel batch.")
     p_run.add_argument("--docker", action="store_true", help="run inside a Docker container")
     p_run.add_argument("--docker-image", default="python:3.11-slim",
                       help="base image for --docker mode (default: python:3.11-slim)")

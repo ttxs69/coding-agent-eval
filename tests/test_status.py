@@ -8,6 +8,7 @@ def test_status_values():
     assert Status.TIMEOUT.value == "timeout"
     assert Status.TASK_ERROR.value == "task_error"
     assert Status.GRADER_ERROR.value == "grader_error"
+    assert Status.DRY_RUN.value == "dry_run"
 
 
 def test_status_is_string_enum():
@@ -24,5 +25,5 @@ def test_test_status_values():
 
 
 def test_status_count():
-    assert len(list(Status)) == 6
+    assert len(list(Status)) == 7
     assert len(list(TestStatus)) == 5
