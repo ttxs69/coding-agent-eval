@@ -586,3 +586,38 @@ def test_cae_run_parallel_continues_after_unexpected_worker_exception(tmp_path, 
     assert "fail_to_pass" in result.stderr or "KeyError" in result.stderr, (
         f"expected error mentioning fail_to_pass; stderr: {result.stderr}"
     )
+
+
+def test_cae_run_dry_run_flag_produces_dry_run_result(tmp_path, tiny_task_path):
+    """`cae run --agent mock --task <tiny> --dry-run` writes a result JSON
+    whose status is 'dry_run' and whose would_run_command is non-empty.
+    No agent subprocess actually runs."""
+    proj = tmp_path
+    tasks = proj / "tasks" / "tiny_task"
+    tasks.mkdir(parents=True)
+    (tasks / "task.json").write_text((tiny_task_path / "task.json").read_text())
+    (tasks / "repo").mkdir(parents=True)
+    for child in (tiny_task_path / "repo").iterdir():
+        dest = tasks / "repo" / child.name
+        if child.is_dir():
+            shutil.copytree(child, dest)
+        else:
+            shutil.copy2(child, dest)
+    (proj / "results").mkdir()
+
+    result = subprocess.run(
+        [sys.executable, "-m", "cae", "run", "--agent", "mock",
+         "--task", "tiny_task", "--dry-run",
+         "--tasks-dir", str(proj / "tasks"),
+         "--results-dir", str(proj / "results")],
+        capture_output=True, text=True, timeout=60,
+    )
+    assert result.returncode == 0, f"stderr: {result.stderr}"
+
+    files = list((proj / "results").glob("*.json"))
+    assert len(files) == 1, f"expected 1 result file, got {len(files)}"
+    data = json.loads(files[0].read_text())
+    assert data["status"] == "dry_run", data["status"]
+    assert data["would_run_command"], "would_run_command must be non-empty"
+    # patch must be empty — agent didn't run
+    assert data["patch"] == ""
