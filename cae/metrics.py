@@ -3,8 +3,10 @@
 Used by both `cae build-site` (writes data/results.json) and `cae report`
 (prints a console table). The mock adapter is filtered out, and statuses
 that mean "the agent never really attempted the task" (task_error,
-grader_error) are excluded from `n_attempted` and `pass_rate` so they
-don't drag down an otherwise-healthy agent.
+grader_error, dry_run) are excluded from `n_attempted` and `pass_rate`
+so they don't drag down an otherwise-healthy agent. `dry_run` is the
+"never even tried" case (the user passed --dry-run) and lands in
+`n_skipped_harness` alongside task_error / grader_error.
 """
 
 from __future__ import annotations

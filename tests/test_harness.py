@@ -348,3 +348,89 @@ def test_dry_run_short_circuits_before_agent_call(
     )
     # No patch (agent didn't run, no diff to capture).
     assert result["patch"] == ""
+
+
+def test_dry_run_cleans_up_owned_workdir(tmp_path, tiny_task_path, fixing_mock):
+    """The dry-run short-circuit must NOT leak the tempdir it created.
+    The workdir cleanup at the end of run() only runs on the success path;
+    a previous version of dry-run returned before that cleanup, leaving
+    a /tmp/cae-* directory behind on every dry-run invocation. Under
+    --parallel N --dry-run, that would leak N tempdirs per batch.
+
+    Regression: pass workdir=None (so the harness creates + owns the
+    tempdir) and keep_workdir=False, then assert the tempdir is gone
+    after the call returns."""
+    import os
+    from cae.harness import run as harness_run
+
+    result = harness_run(
+        task_path=tiny_task_path,
+        agent_name="mock",
+        workdir=None,           # harness creates + owns the tempdir
+        timeout_sec=30,
+        keep_workdir=False,
+        dry_run=True,
+    )
+
+    assert result["status"] == "dry_run"
+    workdir_path = result["workdir"]
+    assert workdir_path, "result must record the workdir path"
+    assert not os.path.exists(workdir_path), (
+        f"dry-run leaked tempdir at {workdir_path}; cleanup must run "
+        f"on the dry-run return path too"
+    )
+
+
+def test_dry_run_skips_is_available_check(tmp_path, tiny_task_path, monkeypatch):
+    """--dry-run should short-circuit BEFORE the is_available() check.
+    Otherwise on a machine that doesn't have the agent binary installed
+    (a common sanity-check scenario — 'what would this parallel batch
+    actually invoke?'), dry-run returns agent_error instead of dry_run
+    and the user never sees would_run_command.
+
+    Test: register a custom adapter whose is_available() returns False,
+    run with dry_run=True, assert status='dry_run' and would_run_command
+    is populated. The adapter's build_command still works because it
+    just assembles an argv list — it doesn't need the binary on PATH."""
+    from cae.agents import ADAPTERS
+    from cae.agents.mock import MockAdapter
+    from cae.harness import run as harness_run
+
+    class _UnavailableMock(MockAdapter):
+        name = "unavailable-mock"
+        default_model = "test-model-1"
+        def is_available(self) -> bool:
+            return False
+        def build_command(self, workdir, prompt, *, model):
+            return ["fake-agent-binary", "--workdir", str(workdir), "--prompt", prompt]
+
+    # Set up workdir with the tiny task's repo so pre-flight can pass.
+    repo_src = tiny_task_path / "repo"
+    workdir = tmp_path / "workdir"
+    subprocess.run(["cp", "-r", str(repo_src), str(workdir)], check=True)
+    subprocess.run(["git", "init", "-q"], cwd=workdir, check=True)
+    subprocess.run(["git", "config", "user.email", "t@x"], cwd=workdir, check=True)
+    subprocess.run(["git", "config", "user.name", "t"], cwd=workdir, check=True)
+    subprocess.run(["git", "add", "."], cwd=workdir, check=True)
+    subprocess.run(["git", "commit", "-q", "-m", "init"], cwd=workdir, check=True)
+
+    ADAPTERS["unavailable-mock"] = _UnavailableMock
+    try:
+        result = harness_run(
+            task_path=tiny_task_path,
+            agent_name="unavailable-mock",
+            workdir=workdir,
+            timeout_sec=30,
+            dry_run=True,
+        )
+    finally:
+        ADAPTERS.pop("unavailable-mock", None)
+
+    assert result["status"] == "dry_run", (
+        f"expected dry_run (not agent_error from is_available()=False), "
+        f"got {result['status']!r}"
+    )
+    assert result["would_run_command"] == [
+        "fake-agent-binary", "--workdir", str(workdir),
+        "--prompt", "Fix the add() function so it returns a + b instead of a - b.",
+    ], result["would_run_command"]

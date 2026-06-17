@@ -310,20 +310,27 @@ def run(
         return _result(task, agent_name, mode, Status.TASK_ERROR, agent_version, pre_flight, pre_flight, "",
                        str(workdir), msg, started_at=started_at, agent_model=agent_model)
 
-    # 7: Run agent
-    if not adapter.is_available():
-        return _result(task, agent_name, mode, Status.AGENT_ERROR, agent_version, pre_flight, pre_flight, "",
-                       str(workdir), f"agent {agent_name} not available", started_at=started_at, agent_model=agent_model)
+    # 7: Run agent (or short-circuit for --dry-run)
+    #
+    # Dry-run is checked BEFORE is_available() so users can sanity-check
+    # the would-be command on machines that don't have the agent binary
+    # installed (a common CI / fresh-checkout scenario). build_command()
+    # only assembles the argv — it doesn't need the binary on PATH.
     cmd = adapter.build_command(workdir, task["prompt"], model=model)
     if dry_run:
         # --dry-run: validate everything up to the agent call, then stop.
         # No subprocess, no patch capture, no post-flight grading. The
         # result records what WOULD have run so users can sanity-check
         # before launching a --parallel batch.
+        if workdir_owned and not keep_workdir:
+            shutil.rmtree(workdir, ignore_errors=True)
         return _result(task, agent_name, mode, Status.DRY_RUN, agent_version, pre_flight, {}, "",
                        str(workdir), "",
                        started_at=started_at, agent_model=agent_model,
                        would_run_command=cmd)
+    if not adapter.is_available():
+        return _result(task, agent_name, mode, Status.AGENT_ERROR, agent_version, pre_flight, pre_flight, "",
+                       str(workdir), f"agent {agent_name} not available", started_at=started_at, agent_model=agent_model)
     agent_rc, agent_stdout, agent_stderr, duration = run_step(cmd, workdir, timeout=timeout_sec)
     if agent_rc == -1:
         return _result(task, agent_name, mode, Status.TIMEOUT, agent_version, pre_flight, pre_flight, "",
@@ -363,7 +370,7 @@ def _result(task, agent_name, mode, status, agent_version, pre_flight, post_flig
             workdir, error, started_at: str, agent_model=None, agent_duration=0.0, agent_usage=None,
             prompt: str | None = None,
             repeat: int = 1, repeat_index: int | None = None,
-            would_run_command: str | list | None = None):
+            would_run_command: list[str] | None = None):
     """Build a result dict in the spec's Output JSON shape."""
     suffix = f"__{repeat_index}" if repeat_index is not None else ""
     # Include the model in the run_id so different `--model` values for
