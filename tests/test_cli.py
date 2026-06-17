@@ -621,3 +621,48 @@ def test_cae_run_dry_run_flag_produces_dry_run_result(tmp_path, tiny_task_path):
     assert data["would_run_command"], "would_run_command must be non-empty"
     # patch must be empty — agent didn't run
     assert data["patch"] == ""
+
+
+def test_cae_run_dry_run_with_parallel_produces_all_dry_run_results(
+    tmp_path, tiny_task_path,
+):
+    """--dry-run + --parallel 3 produces 3 result files, all with
+    status='dry_run' and non-empty would_run_command. None of them
+    actually invoked the agent (no API spend). Headline use case:
+    sanity-check the entire parallel batch before spending money on it."""
+    proj = tmp_path
+    tasks_dir = proj / "tasks"
+    for name in ("tiny__task-1", "tiny__task-2", "tiny__task-3"):
+        t = tasks_dir / name
+        (t / "repo").mkdir(parents=True)
+        (t / "task.json").write_text(
+            (tiny_task_path / "task.json").read_text().replace('"tiny__task-1"', f'"{name}"'))
+        for child in (tiny_task_path / "repo").iterdir():
+            dest = t / "repo" / child.name
+            if child.is_dir():
+                shutil.copytree(child, dest)
+            else:
+                shutil.copy2(child, dest)
+    (proj / "results").mkdir()
+
+    result = subprocess.run(
+        [sys.executable, "-m", "cae", "run", "--agent", "mock",
+         "--task", "tiny__task-1", "--task", "tiny__task-2", "--task", "tiny__task-3",
+         "--parallel", "3", "--dry-run",
+         "--tasks-dir", str(tasks_dir),
+         "--results-dir", str(proj / "results")],
+        capture_output=True, text=True, timeout=60,
+    )
+    assert result.returncode == 0, f"stderr: {result.stderr}"
+
+    result_files = sorted(f.name for f in (proj / "results").glob("*__mock__*.json"))
+    assert len(result_files) == 3, (
+        f"expected 3 dry-run result files, got {len(result_files)}: {result_files}"
+    )
+    for f in (proj / "results").glob("*__mock__*.json"):
+        data = json.loads(f.read_text())
+        assert data["status"] == "dry_run", (
+            f"{f.name}: expected dry_run, got {data['status']}"
+        )
+        assert data["would_run_command"], f"{f.name}: empty would_run_command"
+        assert data["patch"] == "", f"{f.name}: patch should be empty under --dry-run"
