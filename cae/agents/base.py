@@ -17,7 +17,7 @@ else:
 
 
 class Status(StrEnum):
-    """Top-level task status (the spec's 6-value enum)."""
+    """Top-level task status."""
 
     RESOLVED = "resolved"
     FAILED = "failed"
@@ -25,6 +25,7 @@ class Status(StrEnum):
     TIMEOUT = "timeout"
     TASK_ERROR = "task_error"
     GRADER_ERROR = "grader_error"
+    DRY_RUN = "dry_run"
 
 
 class TestStatus(StrEnum):
