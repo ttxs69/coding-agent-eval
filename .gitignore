@@ -16,6 +16,11 @@ dist/
 # Generated static site (output of `cae build-site`)
 site/
 
+# Eval runtime artifacts (harness writes result JSONs; importer populates task dirs)
+# .gitkeep preserved so the empty `results/` directory ships in the repo.
+results/*.json
+tasks/
+
 # Test / cache artifacts
 .pytest_cache/
 .ruff_cache/
