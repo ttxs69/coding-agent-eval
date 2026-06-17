@@ -450,3 +450,59 @@ def test_cae_run_parallel_is_concurrent(tmp_path, tiny_task_path):
     assert parallel < serial * 0.6, (
         f"parallel ({parallel:.1f}s) not meaningfully faster than serial ({serial:.1f}s)"
     )
+
+
+def test_cae_run_parallel_isolates_task_errors(tmp_path, tiny_task_path):
+    """If one unit hits a task_error (missing repo, bad patch, etc.),
+    the other units still complete and write results. The harness returns
+    task_error as a status rather than raising; this test locks that in
+    for the parallel dispatch path.
+    """
+    proj = tmp_path
+    tasks_dir = proj / "tasks"
+    # tiny__task-1: healthy
+    healthy = tasks_dir / "tiny__task-1"
+    (healthy / "repo").mkdir(parents=True)
+    (healthy / "task.json").write_text((tiny_task_path / "task.json").read_text())
+    for child in (tiny_task_path / "repo").iterdir():
+        dest = healthy / "repo" / child.name
+        if child.is_dir():
+            shutil.copytree(child, dest)
+        else:
+            shutil.copy2(child, dest)
+
+    # tiny__broken: setup_cmd fails → harness returns task_error
+    broken = tasks_dir / "tiny__broken"
+    (broken / "repo").mkdir(parents=True)
+    bad_json = json.loads((tiny_task_path / "task.json").read_text())
+    bad_json["instance_id"] = "tiny__broken"
+    bad_json["setup_cmd"] = "false"  # always exits non-zero
+    (broken / "task.json").write_text(json.dumps(bad_json))
+    for child in (tiny_task_path / "repo").iterdir():
+        dest = broken / "repo" / child.name
+        if child.is_dir():
+            shutil.copytree(child, dest)
+        else:
+            shutil.copy2(child, dest)
+
+    (proj / "results").mkdir()
+
+    result = subprocess.run(
+        [sys.executable, "-m", "cae", "run", "--agent", "mock",
+         "--task", "tiny__task-1", "--task", "tiny__broken",
+         "--parallel", "2",
+         "--tasks-dir", str(tasks_dir),
+         "--results-dir", str(proj / "results")],
+        capture_output=True, text=True, timeout=60,
+    )
+    assert result.returncode == 0, f"stderr: {result.stderr}"
+
+    # Both result files must exist, regardless of the broken task.
+    result_files = sorted(f.name for f in (proj / "results").glob("*__mock__*.json"))
+    assert any("tiny__task-1" in n for n in result_files), result_files
+    assert any("tiny__broken" in n for n in result_files), result_files
+
+    # The broken task's status must be task_error, not a crash.
+    broken_file = next(f for f in (proj / "results").glob("*__mock__*tiny__broken*.json"))
+    broken_data = json.loads(broken_file.read_text())
+    assert broken_data["status"] == "task_error", broken_data["status"]
