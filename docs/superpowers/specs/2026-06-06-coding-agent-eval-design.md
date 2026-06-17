@@ -263,7 +263,7 @@ Broken tasks and agent crashes must not silently count as "failed" alongside leg
 - **Timeout**: default 30 min per agent run, configurable. Killed cleanly; patch captured up to kill point.
 - **Workdir cleanup**: default delete after run. `--keep-workdir` prints the path in the result JSON for debugging.
 - **Resume**: if any result file for the requested (task, agent) pair already exists in `results/`, skip with a warning. `--force` to overwrite. With `--repeat N`, runs whose index already has a result file are skipped; missing indices are run. Interrupted batches are restartable by re-running the same `cae run` command.
-- **Concurrency**: v1 is single-threaded. A `--parallel N` flag can come later.
+- **Concurrency**: `--parallel N` runs multiple `(task, repeat-index)` units concurrently via a `ThreadPoolExecutor`. Each unit gets its own workdir (`tempfile.mkdtemp(prefix="cae-")` in `cae/harness.py`) and result file (the filename includes `instance_id` + repeat index, so concurrent writes don't collide). Default is `--parallel 1` (serial), which preserves the original v1 behavior byte-for-byte. Budget cap (`--max-cost-usd`) is best-effort under parallelism — each worker re-checks the shared `spent` total under a lock before starting, but up to N-1 in-flight units may overshoot.
 
 ## Output JSON
 
@@ -364,5 +364,5 @@ A test task fixture is checked in at `cae/tests/fixtures/tiny_task/` (under the 
 - **Q: What metrics?** A: Pass rate, cost, time, tokens. Subscription-billed runs show `null` cost.
 - **Q: Local or Docker first?** A: Local default, Docker opt-in.
 - **Q: Hand-author tasks or import?** A: Import SWE-bench Verified for v1; hand-authored tasks can supplement later.
-- **Q: Concurrency in v1?** A: Single-threaded. `--parallel N` deferred.
+- **Q: Concurrency in v1?** A: Resolved — `--parallel N` is implemented (thread pool, per-unit workdir, best-effort budget cap). Default is `--parallel 1` (serial).
 - **Q: Public reporting?** A: Static site is canonical; `cae report --format table` is the local-dev view.
