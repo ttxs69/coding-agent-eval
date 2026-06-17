@@ -299,3 +299,52 @@ def test_preflight_task_error_records_agent_model_and_version(
     assert "not in pytest output" in result["error"]
     assert "fail_to_pass" in result["error"]
     assert "pass_to_pass" in result["error"]
+
+
+def test_dry_run_short_circuits_before_agent_call(
+    tmp_path, tiny_task_path, fixing_mock,
+):
+    """--dry-run runs setup and pre-flight, then stops before invoking the
+    agent. The result has status='dry_run' and a would_run_command field
+    containing the adapter's build_command argv. No agent subprocess is
+    actually executed."""
+    from cae.harness import run as harness_run
+
+    repo_src = tiny_task_path / "repo"
+    workdir = tmp_path / "workdir"
+    subprocess.run(["cp", "-r", str(repo_src), str(workdir)], check=True)
+    subprocess.run(["git", "init", "-q"], cwd=workdir, check=True)
+    subprocess.run(["git", "config", "user.email", "t@x"], cwd=workdir, check=True)
+    subprocess.run(["git", "config", "user.name", "t"], cwd=workdir, check=True)
+    subprocess.run(["git", "add", "."], cwd=workdir, check=True)
+    subprocess.run(["git", "commit", "-q", "-m", "init"], cwd=workdir, check=True)
+
+    # fixing_mock.build_command returns [py, "-c", script, workdir]. Under
+    # dry-run we expect this exact argv to surface in the result and the
+    # script to NOT have been executed (so main.py keeps its bug).
+    result = harness_run(
+        task_path=tiny_task_path,
+        agent_name="mock",
+        workdir=workdir,
+        timeout_sec=30,
+        dry_run=True,
+    )
+
+    assert result["status"] == "dry_run", (
+        f"expected dry_run, got {result['status']!r}"
+    )
+    assert "would_run_command" in result, "result must include would_run_command"
+    cmd = result["would_run_command"]
+    # The command is the list returned by _FixingMock.build_command.
+    assert isinstance(cmd, (list, str)) and cmd, "would_run_command must be non-empty"
+    # main.py still contains the bug — the fixing script did NOT run.
+    assert "return a - b" in (workdir / "main.py").read_text(), (
+        "dry-run must not have invoked the agent (main.py still has the bug)"
+    )
+    # Pre-flight ran (the harness validated test IDs); post-flight did not.
+    assert "pre_flight" in result["test_results"]
+    assert result["test_results"].get("post_flight") in (None, {}, ""), (
+        "dry-run must not populate post_flight (no patch to grade against)"
+    )
+    # No patch (agent didn't run, no diff to capture).
+    assert result["patch"] == ""
