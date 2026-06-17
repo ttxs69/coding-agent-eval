@@ -280,3 +280,309 @@ def test_cae_run_docker_flag_rejected_by_docker_check(tmp_path, tiny_task_path):
     # If docker was missing, the run should fail with an error about docker
     if result.returncode != 0:
         assert "docker" in result.stderr.lower() or result.returncode == 2
+
+
+def test_cae_run_accepts_multiple_tasks_and_parallel_flag(tmp_path, tiny_task_path):
+    """`--task foo --task bar --parallel 3` is accepted by argparse (does NOT
+    yet run them in parallel — that comes later). Verifies the CLI surface
+    before any run logic changes.
+    """
+    proj = tmp_path
+    tasks_dir = proj / "tasks"
+    for name in ("tiny__task-1", "tiny__task-2"):
+        t = tasks_dir / name
+        (t / "repo").mkdir(parents=True)
+        (t / "task.json").write_text(
+            (tiny_task_path / "task.json").read_text().replace('"tiny__task-1"', f'"{name}"'))
+        for child in (tiny_task_path / "repo").iterdir():
+            dest = t / "repo" / child.name
+            if child.is_dir():
+                shutil.copytree(child, dest)
+            else:
+                shutil.copy2(child, dest)
+    (proj / "results").mkdir()
+
+    result = subprocess.run(
+        [sys.executable, "-m", "cae", "run", "--agent", "mock",
+         "--task", "tiny__task-1", "--task", "tiny__task-2",
+         "--parallel", "3",
+         "--tasks-dir", str(tasks_dir),
+         "--results-dir", str(proj / "results")],
+        capture_output=True, text=True,
+    )
+    # We only assert argparse acceptance here — exit code 0 OR a runtime error
+    # is fine, but NOT an argparse error (exit code 2 with "unrecognized" /
+    # "invalid choice" wording).
+    assert result.returncode != 2 or "unrecognized arguments" not in result.stderr, (
+        f"argparse rejected the new flags: {result.stderr}"
+    )
+
+
+def test_execute_run_unit_writes_result_and_returns_cost(tmp_path, tiny_task_path):
+    """`_execute_run_unit` runs one (task, repeat_index) pair end-to-end and
+    returns the cost spent (0.0 for mock). It's the unit-of-work callable that
+    the parallel dispatcher will hand to ThreadPoolExecutor."""
+    from cae.cli import _execute_run_unit, _resolve_effective_model, _safe_model_for_filename
+
+    proj = tmp_path
+    tasks_dir = proj / "tasks"
+    task_slug = "tiny__task-1"
+    task_path = tasks_dir / task_slug
+    (task_path / "repo").mkdir(parents=True)
+    (task_path / "task.json").write_text((tiny_task_path / "task.json").read_text())
+    for child in (tiny_task_path / "repo").iterdir():
+        dest = task_path / "repo" / child.name
+        if child.is_dir():
+            shutil.copytree(child, dest)
+        else:
+            shutil.copy2(child, dest)
+    results_dir = proj / "results"
+    results_dir.mkdir()
+
+    effective_model = _resolve_effective_model("mock", None)
+    safe_model = _safe_model_for_filename(effective_model)
+
+    cost, output = _execute_run_unit(
+        task_path=task_path,
+        agent_name="mock",
+        instance_id=task_slug,
+        safe_model=safe_model,
+        repeat=1,
+        repeat_index=None,
+        results_dir=results_dir,
+        workdir=None,
+        timeout_sec=600,
+        fetch_fresh=False,
+        keep_workdir=False,
+        docker=False,
+        docker_image="python:3.11-slim",
+        env_file=None,
+        docker_network="bridge",
+        docker_extra_mounts=None,
+        model=None,
+        force=False,
+    )
+    assert cost == 0.0  # mock has no cost
+    assert isinstance(output, str)
+    assert "wrote" in output
+    assert "status:" in output
+    files = list(results_dir.glob("*.json"))
+    assert len(files) == 1
+    data = json.loads(files[0].read_text())
+    assert data["agent"] == "mock"
+    assert data["task_id"] == "tiny__task-1"
+
+
+def test_cae_run_parallel_produces_all_results(tmp_path, tiny_task_path):
+    """`--task A --task B --parallel 2` produces two result files."""
+    proj = tmp_path
+    tasks_dir = proj / "tasks"
+    for name in ("tiny__task-1", "tiny__task-2"):
+        t = tasks_dir / name
+        (t / "repo").mkdir(parents=True)
+        (t / "task.json").write_text(
+            (tiny_task_path / "task.json").read_text().replace('"tiny__task-1"', f'"{name}"'))
+        for child in (tiny_task_path / "repo").iterdir():
+            dest = t / "repo" / child.name
+            if child.is_dir():
+                shutil.copytree(child, dest)
+            else:
+                shutil.copy2(child, dest)
+    (proj / "results").mkdir()
+
+    result = subprocess.run(
+        [sys.executable, "-m", "cae", "run", "--agent", "mock",
+         "--task", "tiny__task-1", "--task", "tiny__task-2",
+         "--parallel", "2",
+         "--tasks-dir", str(tasks_dir),
+         "--results-dir", str(proj / "results")],
+        capture_output=True, text=True, timeout=60,
+    )
+    assert result.returncode == 0, f"stderr: {result.stderr}"
+    result_files = [f for f in (proj / "results").glob("*.json") if "__mock__" in f.name]
+    assert len(result_files) == 2, (
+        f"expected 2 result files, got {len(result_files)}: {[f.name for f in result_files]}"
+    )
+
+
+def test_cae_run_parallel_is_concurrent(tmp_path, tiny_task_path):
+    """When --parallel=N, N units run concurrently. We verify by injecting a
+    sleep into setup_cmd so each unit takes ~1s, then checking that
+    total wall time for parallel-3 is meaningfully faster than serial-1.
+    """
+    import time
+
+    proj = tmp_path
+    tasks_dir = proj / "tasks"
+    for name in ("tiny__task-1", "tiny__task-2", "tiny__task-3"):
+        t = tasks_dir / name
+        (t / "repo").mkdir(parents=True)
+        task_json = json.loads((tiny_task_path / "task.json").read_text())
+        task_json["instance_id"] = name
+        task_json["setup_cmd"] = "sleep 1"
+        (t / "task.json").write_text(json.dumps(task_json))
+        for child in (tiny_task_path / "repo").iterdir():
+            dest = t / "repo" / child.name
+            if child.is_dir():
+                shutil.copytree(child, dest)
+            else:
+                shutil.copy2(child, dest)
+    (proj / "results").mkdir()
+
+    def run_cae(parallel: int) -> float:
+        start = time.monotonic()
+        result = subprocess.run(
+            [sys.executable, "-m", "cae", "run", "--agent", "mock",
+             "--task", "tiny__task-1", "--task", "tiny__task-2", "--task", "tiny__task-3",
+             "--parallel", str(parallel),
+             "--tasks-dir", str(tasks_dir),
+             "--results-dir", str(proj / "results"),
+             "--force"],
+            capture_output=True, text=True, timeout=120,
+        )
+        assert result.returncode == 0, f"stderr: {result.stderr}"
+        return time.monotonic() - start
+
+    serial = run_cae(1)
+    parallel = run_cae(3)
+    # 3 units @ ~1s each. Serial ~3s+overhead; parallel-3 ~1s+overhead.
+    # Allow generous slack — assert parallel is at least 40% faster than serial.
+    assert parallel < serial * 0.6, (
+        f"parallel ({parallel:.1f}s) not meaningfully faster than serial ({serial:.1f}s)"
+    )
+
+
+def test_cae_run_parallel_isolates_task_errors(tmp_path, tiny_task_path):
+    """If one unit hits a task_error (missing repo, bad patch, etc.),
+    the other units still complete and write results. The harness returns
+    task_error as a status rather than raising; this test locks that in
+    for the parallel dispatch path.
+    """
+    proj = tmp_path
+    tasks_dir = proj / "tasks"
+    # tiny__task-1: healthy
+    healthy = tasks_dir / "tiny__task-1"
+    (healthy / "repo").mkdir(parents=True)
+    (healthy / "task.json").write_text((tiny_task_path / "task.json").read_text())
+    for child in (tiny_task_path / "repo").iterdir():
+        dest = healthy / "repo" / child.name
+        if child.is_dir():
+            shutil.copytree(child, dest)
+        else:
+            shutil.copy2(child, dest)
+
+    # tiny__broken: setup_cmd fails → harness returns task_error
+    broken = tasks_dir / "tiny__broken"
+    (broken / "repo").mkdir(parents=True)
+    bad_json = json.loads((tiny_task_path / "task.json").read_text())
+    bad_json["instance_id"] = "tiny__broken"
+    bad_json["setup_cmd"] = "false"  # always exits non-zero
+    (broken / "task.json").write_text(json.dumps(bad_json))
+    for child in (tiny_task_path / "repo").iterdir():
+        dest = broken / "repo" / child.name
+        if child.is_dir():
+            shutil.copytree(child, dest)
+        else:
+            shutil.copy2(child, dest)
+
+    (proj / "results").mkdir()
+
+    result = subprocess.run(
+        [sys.executable, "-m", "cae", "run", "--agent", "mock",
+         "--task", "tiny__task-1", "--task", "tiny__broken",
+         "--parallel", "2",
+         "--tasks-dir", str(tasks_dir),
+         "--results-dir", str(proj / "results")],
+        capture_output=True, text=True, timeout=60,
+    )
+    assert result.returncode == 0, f"stderr: {result.stderr}"
+
+    # Both result files must exist, regardless of the broken task.
+    result_files = sorted(f.name for f in (proj / "results").glob("*__mock__*.json"))
+    assert any("tiny__task-1" in n for n in result_files), result_files
+    assert any("tiny__broken" in n for n in result_files), result_files
+
+    # The broken task's status must be task_error, not a crash.
+    broken_file = next(f for f in (proj / "results").glob("*__mock__*tiny__broken*.json"))
+    broken_data = json.loads(broken_file.read_text())
+    assert broken_data["status"] == "task_error", broken_data["status"]
+
+
+def test_cae_run_parallel_continues_after_unexpected_worker_exception(tmp_path, tiny_task_path):
+    """If a worker raises UNEXPECTEDLY (not task_error — a real exception
+    like KeyError on a malformed task.json), the loop must catch it, log
+    it, and continue processing the other workers' results. The healthy
+    task's `wrote <path>` / `status:` output must still appear on stdout,
+    and the CLI must exit non-zero.
+
+    Under the old (uncaught) code, the first worker's exception exits the
+    as_completed loop immediately, so any workers that finish later never
+    get their output printed.
+    """
+    proj = tmp_path
+    tasks_dir = proj / "tasks"
+
+    # Healthy task with a slow setup_cmd so it finishes AFTER the broken
+    # task has already raised. This forces the order: broken-fails-first,
+    # healthy-finishes-second. Under the old code, the broken task's
+    # exception would exit the loop before the healthy task's output is
+    # iterated.
+    healthy = tasks_dir / "tiny__task-1"
+    (healthy / "repo").mkdir(parents=True)
+    healthy_json = json.loads((tiny_task_path / "task.json").read_text())
+    healthy_json["setup_cmd"] = "sleep 1"  # ensure healthy finishes second
+    (healthy / "task.json").write_text(json.dumps(healthy_json))
+    for child in (tiny_task_path / "repo").iterdir():
+        dest = healthy / "repo" / child.name
+        if child.is_dir():
+            shutil.copytree(child, dest)
+        else:
+            shutil.copy2(child, dest)
+
+    # Broken task: malformed task.json (missing required 'fail_to_pass').
+    # The harness's run() does `fail_to_pass = task["fail_to_pass"]` near
+    # the top, raising KeyError before any setup_cmd runs — so this fails
+    # FAST, before the healthy task finishes its 1s sleep.
+    broken = tasks_dir / "tiny__broken"
+    (broken / "repo").mkdir(parents=True)
+    bad_json = json.loads((tiny_task_path / "task.json").read_text())
+    del bad_json["fail_to_pass"]
+    bad_json["instance_id"] = "tiny__broken"
+    (broken / "task.json").write_text(json.dumps(bad_json))
+    for child in (tiny_task_path / "repo").iterdir():
+        dest = broken / "repo" / child.name
+        if child.is_dir():
+            shutil.copytree(child, dest)
+        else:
+            shutil.copy2(child, dest)
+
+    (proj / "results").mkdir()
+
+    result = subprocess.run(
+        [sys.executable, "-m", "cae", "run", "--agent", "mock",
+         "--task", "tiny__task-1", "--task", "tiny__broken",
+         "--parallel", "2",
+         "--tasks-dir", str(tasks_dir),
+         "--results-dir", str(proj / "results")],
+        capture_output=True, text=True, timeout=60,
+    )
+
+    # The healthy task's result file must be on disk (pool.__exit__ waits).
+    assert any("tiny__task-1" in f.name for f in (proj / "results").glob("*.json")), (
+        f"healthy task result missing; stderr: {result.stderr}"
+    )
+    # Exit code must be non-zero — one unit raised unexpectedly.
+    assert result.returncode != 0, (
+        f"expected non-zero exit, got {result.returncode}; stdout: {result.stdout}"
+    )
+    # The healthy task's output must STILL be visible on stdout even though
+    # the broken task raised first. Under the old code, the loop exits on
+    # the first exception and the healthy task's `wrote` line is never printed.
+    assert "wrote" in result.stdout and "status:" in result.stdout, (
+        f"healthy task's output not printed; stdout: {result.stdout}\n"
+        f"stderr: {result.stderr}"
+    )
+    # The error must be visible somewhere.
+    assert "fail_to_pass" in result.stderr or "KeyError" in result.stderr, (
+        f"expected error mentioning fail_to_pass; stderr: {result.stderr}"
+    )

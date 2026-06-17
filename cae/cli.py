@@ -41,19 +41,72 @@ def _safe_model_for_filename(model: str | None) -> str:
     return (model or "default").replace("/", "-").replace(":", "-")
 
 
-def cmd_run(args: argparse.Namespace) -> int:
-    from cae.harness import run
-    task_path = Path(args.tasks_dir) / args.task
-    if not (task_path / "task.json").exists():
-        print(f"error: task {args.task!r} not found at {task_path}", file=sys.stderr)
-        return 2
+def _execute_run_unit(
+    *,
+    task_path: Path,
+    agent_name: str,
+    instance_id: str,
+    safe_model: str,
+    repeat: int,
+    repeat_index: int | None,
+    results_dir: Path,
+    workdir: Path | None,
+    timeout_sec: int,
+    fetch_fresh: bool,
+    keep_workdir: bool,
+    docker: bool,
+    docker_image: str,
+    env_file: Path | None,
+    docker_network: str,
+    docker_extra_mounts: list[tuple[str, str]] | None,
+    model: str | None,
+    force: bool,
+) -> tuple[float, str]:
+    """Run ONE (task, repeat_index) pair end-to-end.
 
+    Returns ``(cost_usd, output_text)`` where ``output_text`` is the lines
+    that would otherwise have been printed. Callers decide whether to print
+    them (serial mode) or buffer + emit atomically under a lock (parallel
+    mode). Returns ``(0.0, skip_msg)`` if a result file already exists
+    and ``force`` is False.
+    """
+    from cae.harness import run
+    lines: list[str] = []
+    suffix = f"__{repeat_index}" if repeat_index is not None else ""
+    out_pattern = f"*__{agent_name}__{safe_model}__{instance_id}{suffix}.json"
+    existing = list(results_dir.glob(out_pattern))
+    if existing and not force:
+        lines.append(
+            f"skipping {out_pattern}: {len(existing)} existing result(s). Use --force to overwrite."
+        )
+        return 0.0, "\n".join(lines)
+    result = run(
+        task_path=task_path,
+        agent_name=agent_name,
+        workdir=workdir,
+        timeout_sec=timeout_sec,
+        fetch_fresh=fetch_fresh,
+        keep_workdir=keep_workdir,
+        docker=docker,
+        docker_image=docker_image,
+        env_file=env_file,
+        docker_network=docker_network,
+        docker_extra_mounts=docker_extra_mounts,
+        model=model,
+        repeat=repeat,
+        repeat_index=repeat_index,
+    )
+    out = results_dir / f"{result['run_id']}.json"
+    out.write_text(json.dumps(result, indent=2, default=str))
+    lines.append(f"wrote {out}")
+    lines.append(f"status: {result['status']}")
+    cost = (result.get("usage") or {}).get("cost_usd") or 0.0
+    return cost, "\n".join(lines)
+
+
+def cmd_run(args: argparse.Namespace) -> int:
     results_dir = Path(args.results_dir)
     results_dir.mkdir(parents=True, exist_ok=True)
-
-    # Read the instance_id from task.json so the result-file glob matches by
-    # the actual id used in the filename (not the directory name on disk).
-    instance_id = json.loads((task_path / "task.json").read_text())["instance_id"]
 
     # Determine the model name the harness will use, so the resume glob
     # below matches the filename the harness will actually write. The
@@ -66,57 +119,153 @@ def cmd_run(args: argparse.Namespace) -> int:
     effective_model = _resolve_effective_model(args.agent, args.model)
     safe_model = _safe_model_for_filename(effective_model)
 
-    # Resume: per (task, agent, model, repeat-index), skip if a result file
-    # already exists. Including the model in the glob means running the
-    # same (agent, task) with a different --model produces a fresh file
-    # without needing --force. With --repeat N, all N indices must be
-    # missing for the pair to fully run.
     workdir = None
     if args.workdir:
         workdir = Path(args.workdir)
     repeat = max(1, args.repeat)
-    spent = 0.0  # running total of cost_usd across the loop, for --max-cost-usd
     max_cost = args.max_cost_usd
-    for i in range(1, repeat + 1):
-        if max_cost is not None and spent > max_cost:
-            print(
-                f"budget exhausted: spent ${spent:.4f} > max ${max_cost:.4f}; stopping at i={i}/{repeat}",
-                file=sys.stderr,
+
+    docker_extra_mounts = ([tuple(m.split(":", 1)) for m in args.docker_mount.split(",")]
+                          if args.docker_mount else None)
+    env_file = Path(args.env_file) if args.env_file else None
+
+    # Validate tasks up front and build the units list = cross-product of
+    # tasks × repeat indices. Failing fast here means a typo doesn't waste
+    # API spend by starting parallel work that aborts mid-flight.
+    units: list[tuple[Path, str, int | None]] = []
+    for task_id in args.tasks:
+        task_path = Path(args.tasks_dir) / task_id
+        if not (task_path / "task.json").exists():
+            print(f"error: task {task_id!r} not found at {task_path}", file=sys.stderr)
+            return 2
+        instance_id = json.loads((task_path / "task.json").read_text())["instance_id"]
+        for i in range(1, repeat + 1):
+            units.append((task_path, instance_id, i if repeat > 1 else None))
+
+    parallel = max(1, args.parallel)
+
+    if parallel == 1 or len(units) <= 1:
+        # Serial path: preserve the original output behavior exactly
+        # (print each line as it's produced, no buffering).
+        spent = 0.0
+        for task_path, instance_id, repeat_index in units:
+            if max_cost is not None and spent > max_cost:
+                print(
+                    f"budget exhausted: spent ${spent:.4f} > max ${max_cost:.4f}",
+                    file=sys.stderr,
+                )
+                break
+            cost, output = _execute_run_unit(
+                task_path=task_path,
+                agent_name=args.agent,
+                instance_id=instance_id,
+                safe_model=safe_model,
+                repeat=repeat,
+                repeat_index=repeat_index,
+                results_dir=results_dir,
+                workdir=workdir,
+                timeout_sec=args.timeout * 60,
+                fetch_fresh=args.fetch_fresh,
+                keep_workdir=args.keep_workdir,
+                docker=args.docker,
+                docker_image=args.docker_image,
+                env_file=env_file,
+                docker_network=args.docker_network,
+                docker_extra_mounts=docker_extra_mounts,
+                model=args.model,
+                force=args.force,
             )
-            break
-        repeat_index = i if repeat > 1 else None
-        suffix = f"__{i}" if repeat_index is not None else ""
-        out_pattern = f"*__{args.agent}__{safe_model}__{instance_id}{suffix}.json"
-        existing = list(results_dir.glob(out_pattern))
-        if existing and not args.force:
-            print(f"skipping {out_pattern}: {len(existing)} existing result(s). Use --force to overwrite.")
-            continue
-        result = run(
-            task_path=task_path,
-            agent_name=args.agent,
-            workdir=workdir,
-            timeout_sec=args.timeout * 60,
-            fetch_fresh=args.fetch_fresh,
-            keep_workdir=args.keep_workdir,
-            docker=args.docker,
-            docker_image=args.docker_image,
-            env_file=Path(args.env_file) if args.env_file else None,
-            docker_network=args.docker_network,
-            docker_extra_mounts=[tuple(m.split(":", 1)) for m in args.docker_mount.split(",")] if args.docker_mount else None,
-            model=args.model,
-            repeat=repeat,
-            repeat_index=repeat_index,
-        )
-        out = results_dir / f"{result['run_id']}.json"
-        out.write_text(json.dumps(result, indent=2, default=str))
-        print(f"wrote {out}")
-        print(f"status: {result['status']}")
-        # Accumulate cost (subscription-billed runs have cost_usd=None;
-        # treat that as $0 for budget purposes).
-        cost = (result.get("usage") or {}).get("cost_usd") or 0.0
-        spent += cost
-        if max_cost is not None:
-            print(f"spent: ${spent:.4f} / max ${max_cost:.4f}")
+            if output:
+                print(output)
+            spent += cost
+            if max_cost is not None:
+                print(f"spent: ${spent:.4f} / max ${max_cost:.4f}")
+        return 0
+
+    # Parallel path: ThreadPoolExecutor with output buffering + a budget
+    # lock. The harness already isolates each (task, repeat) unit:
+    #   - workdir is a fresh tempfile.mkdtemp() per run
+    #   - result filenames include instance_id + repeat_index, so writes
+    #     don't collide
+    #   - the harness returns task_error / agent_error as result statuses
+    #     rather than raising, so a failing unit doesn't poison the pool
+    import threading
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    print_lock = threading.Lock()
+    budget_lock = threading.Lock()
+    spent_box = [0.0]  # mutable holder so the worker closure can update it
+
+    def worker(unit):
+        task_path, instance_id, repeat_index = unit
+        # Best-effort budget check before doing the work. May overshoot by
+        # up to (parallel - 1) in-flight units — the cap is a soft target
+        # under parallelism, not a hard ceiling.
+        with budget_lock:
+            if max_cost is not None and spent_box[0] > max_cost:
+                return ("skip", instance_id, repeat_index, 0.0, "")
+        try:
+            cost, output = _execute_run_unit(
+                task_path=task_path,
+                agent_name=args.agent,
+                instance_id=instance_id,
+                safe_model=safe_model,
+                repeat=repeat,
+                repeat_index=repeat_index,
+                results_dir=results_dir,
+                workdir=workdir,
+                timeout_sec=args.timeout * 60,
+                fetch_fresh=args.fetch_fresh,
+                keep_workdir=args.keep_workdir,
+                docker=args.docker,
+                docker_image=args.docker_image,
+                env_file=env_file,
+                docker_network=args.docker_network,
+                docker_extra_mounts=docker_extra_mounts,
+                model=args.model,
+                force=args.force,
+            )
+        except BaseException as e:
+            # The harness is supposed to return task_error / agent_error
+            # as statuses rather than raise, but "supposed to" isn't
+            # "guaranteed to" — malformed task.json, OS errors, and
+            # similar can still raise. Don't let one unit's exception
+            # abort the loop and lose other workers' output. KeyboardInterrupt
+            # must propagate so Ctrl-C still works.
+            if isinstance(e, KeyboardInterrupt):
+                raise
+            return ("error", instance_id, repeat_index, repr(e), "")
+        with budget_lock:
+            spent_box[0] += cost
+        return ("ok", instance_id, repeat_index, cost, output)
+
+    had_error = False
+    with ThreadPoolExecutor(max_workers=parallel) as pool:
+        # The harness returns task_error / agent_error as result statuses
+        # rather than raising, so a failing unit doesn't poison the pool.
+        futures = [pool.submit(worker, u) for u in units]
+        for fut in as_completed(futures):
+            tag, instance_id, repeat_index, cost, output = fut.result()
+            with print_lock:
+                if tag == "skip":
+                    print(f"[{instance_id}] skipped: budget exhausted")
+                    continue
+                if tag == "error":
+                    had_error = True
+                    suffix = f" (repeat {repeat_index})" if repeat_index is not None else ""
+                    print(f"--- {instance_id}{suffix} WORKER ERROR: {cost} ---",
+                          file=sys.stderr)
+                    continue
+                suffix = f" (repeat {repeat_index})" if repeat_index is not None else ""
+                print(f"--- {instance_id}{suffix} (cost ${cost:.4f}) ---")
+                if output:
+                    print(output.rstrip())
+                if max_cost is not None:
+                    with budget_lock:
+                        cur = spent_box[0]
+                    print(f"total spent: ${cur:.4f} / max ${max_cost:.4f}")
+    if had_error:
+        return 1
     return 0
 
 
@@ -333,7 +482,8 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_run = sub.add_parser("run", help="run an agent on a single task")
     p_run.add_argument("--agent", required=True)
-    p_run.add_argument("--task", required=True)
+    p_run.add_argument("--task", action="append", required=True, dest="tasks",
+                      help="task instance_id (repeatable for multi-task runs)")
     p_run.add_argument("--tasks-dir", default="tasks")
     p_run.add_argument("--results-dir", default="results")
     p_run.add_argument("--timeout", type=int, default=30, help="per-stage timeout in minutes")
@@ -343,6 +493,11 @@ def build_parser() -> argparse.ArgumentParser:
     p_run.add_argument("--keep-workdir", action="store_true", help="don't delete the workdir after the run")
     p_run.add_argument("--force", action="store_true", help="overwrite existing result files for this (task, agent) pair")
     p_run.add_argument("--repeat", type=int, default=1, help="run this many times (default: 1)")
+    p_run.add_argument("--parallel", type=int, default=1,
+                      help="run multiple --task / --repeat units concurrently with up to N "
+                           "workers (default: 1 = serial). When >1, per-unit stdout is "
+                           "buffered and printed atomically at completion. Budget cap "
+                           "(--max-cost-usd) is best-effort under parallelism.")
     p_run.add_argument("--docker", action="store_true", help="run inside a Docker container")
     p_run.add_argument("--docker-image", default="python:3.11-slim",
                       help="base image for --docker mode (default: python:3.11-slim)")
