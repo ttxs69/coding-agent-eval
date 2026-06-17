@@ -41,8 +41,62 @@ def _safe_model_for_filename(model: str | None) -> str:
     return (model or "default").replace("/", "-").replace(":", "-")
 
 
-def cmd_run(args: argparse.Namespace) -> int:
+def _execute_run_unit(
+    *,
+    task_path: Path,
+    agent_name: str,
+    instance_id: str,
+    safe_model: str,
+    repeat: int,
+    repeat_index: int | None,
+    results_dir: Path,
+    workdir: Path | None,
+    timeout_sec: int,
+    fetch_fresh: bool,
+    keep_workdir: bool,
+    docker: bool,
+    docker_image: str,
+    env_file: Path | None,
+    docker_network: str,
+    docker_extra_mounts: list[tuple[str, str]] | None,
+    model: str | None,
+    force: bool,
+) -> float:
+    """Run ONE (task, repeat_index) pair end-to-end. Returns cost_usd spent.
+
+    Skips (returns 0.0) if a result file already exists and `force` is False.
+    """
     from cae.harness import run
+    suffix = f"__{repeat_index}" if repeat_index is not None else ""
+    out_pattern = f"*__{agent_name}__{safe_model}__{instance_id}{suffix}.json"
+    existing = list(results_dir.glob(out_pattern))
+    if existing and not force:
+        print(f"skipping {out_pattern}: {len(existing)} existing result(s). Use --force to overwrite.")
+        return 0.0
+    result = run(
+        task_path=task_path,
+        agent_name=agent_name,
+        workdir=workdir,
+        timeout_sec=timeout_sec,
+        fetch_fresh=fetch_fresh,
+        keep_workdir=keep_workdir,
+        docker=docker,
+        docker_image=docker_image,
+        env_file=env_file,
+        docker_network=docker_network,
+        docker_extra_mounts=docker_extra_mounts,
+        model=model,
+        repeat=repeat,
+        repeat_index=repeat_index,
+    )
+    out = results_dir / f"{result['run_id']}.json"
+    out.write_text(json.dumps(result, indent=2, default=str))
+    print(f"wrote {out}")
+    print(f"status: {result['status']}")
+    return (result.get("usage") or {}).get("cost_usd") or 0.0
+
+
+def cmd_run(args: argparse.Namespace) -> int:
     results_dir = Path(args.results_dir)
     results_dir.mkdir(parents=True, exist_ok=True)
 
@@ -63,6 +117,10 @@ def cmd_run(args: argparse.Namespace) -> int:
     repeat = max(1, args.repeat)
     spent = 0.0  # running total of cost_usd across the loop, for --max-cost-usd
     max_cost = args.max_cost_usd
+
+    docker_extra_mounts = ([tuple(m.split(":", 1)) for m in args.docker_mount.split(",")]
+                          if args.docker_mount else None)
+    env_file = Path(args.env_file) if args.env_file else None
 
     for task_id in args.tasks:
         task_path = Path(args.tasks_dir) / task_id
@@ -87,36 +145,26 @@ def cmd_run(args: argparse.Namespace) -> int:
                 )
                 break
             repeat_index = i if repeat > 1 else None
-            suffix = f"__{i}" if repeat_index is not None else ""
-            out_pattern = f"*__{args.agent}__{safe_model}__{instance_id}{suffix}.json"
-            existing = list(results_dir.glob(out_pattern))
-            if existing and not args.force:
-                print(f"skipping {out_pattern}: {len(existing)} existing result(s). Use --force to overwrite.")
-                continue
-            result = run(
+            spent += _execute_run_unit(
                 task_path=task_path,
                 agent_name=args.agent,
+                instance_id=instance_id,
+                safe_model=safe_model,
+                repeat=repeat,
+                repeat_index=repeat_index,
+                results_dir=results_dir,
                 workdir=workdir,
                 timeout_sec=args.timeout * 60,
                 fetch_fresh=args.fetch_fresh,
                 keep_workdir=args.keep_workdir,
                 docker=args.docker,
                 docker_image=args.docker_image,
-                env_file=Path(args.env_file) if args.env_file else None,
+                env_file=env_file,
                 docker_network=args.docker_network,
-                docker_extra_mounts=[tuple(m.split(":", 1)) for m in args.docker_mount.split(",")] if args.docker_mount else None,
+                docker_extra_mounts=docker_extra_mounts,
                 model=args.model,
-                repeat=repeat,
-                repeat_index=repeat_index,
+                force=args.force,
             )
-            out = results_dir / f"{result['run_id']}.json"
-            out.write_text(json.dumps(result, indent=2, default=str))
-            print(f"wrote {out}")
-            print(f"status: {result['status']}")
-            # Accumulate cost (subscription-billed runs have cost_usd=None;
-            # treat that as $0 for budget purposes).
-            cost = (result.get("usage") or {}).get("cost_usd") or 0.0
-            spent += cost
             if max_cost is not None:
                 print(f"spent: ${spent:.4f} / max ${max_cost:.4f}")
     return 0

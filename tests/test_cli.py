@@ -316,3 +316,55 @@ def test_cae_run_accepts_multiple_tasks_and_parallel_flag(tmp_path, tiny_task_pa
     assert result.returncode != 2 or "unrecognized arguments" not in result.stderr, (
         f"argparse rejected the new flags: {result.stderr}"
     )
+
+
+def test_execute_run_unit_writes_result_and_returns_cost(tmp_path, tiny_task_path):
+    """`_execute_run_unit` runs one (task, repeat_index) pair end-to-end and
+    returns the cost spent (0.0 for mock). It's the unit-of-work callable that
+    the parallel dispatcher will hand to ThreadPoolExecutor."""
+    from cae.cli import _execute_run_unit, _resolve_effective_model, _safe_model_for_filename
+
+    proj = tmp_path
+    tasks_dir = proj / "tasks"
+    task_slug = "tiny__task-1"
+    task_path = tasks_dir / task_slug
+    (task_path / "repo").mkdir(parents=True)
+    (task_path / "task.json").write_text((tiny_task_path / "task.json").read_text())
+    for child in (tiny_task_path / "repo").iterdir():
+        dest = task_path / "repo" / child.name
+        if child.is_dir():
+            shutil.copytree(child, dest)
+        else:
+            shutil.copy2(child, dest)
+    results_dir = proj / "results"
+    results_dir.mkdir()
+
+    effective_model = _resolve_effective_model("mock", None)
+    safe_model = _safe_model_for_filename(effective_model)
+
+    cost = _execute_run_unit(
+        task_path=task_path,
+        agent_name="mock",
+        instance_id=task_slug,
+        safe_model=safe_model,
+        repeat=1,
+        repeat_index=None,
+        results_dir=results_dir,
+        workdir=None,
+        timeout_sec=600,
+        fetch_fresh=False,
+        keep_workdir=False,
+        docker=False,
+        docker_image="python:3.11-slim",
+        env_file=None,
+        docker_network="bridge",
+        docker_extra_mounts=None,
+        model=None,
+        force=False,
+    )
+    assert cost == 0.0  # mock has no cost
+    files = list(results_dir.glob("*.json"))
+    assert len(files) == 1
+    data = json.loads(files[0].read_text())
+    assert data["agent"] == "mock"
+    assert data["task_id"] == "tiny__task-1"
