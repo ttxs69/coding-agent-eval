@@ -260,7 +260,7 @@ Broken tasks and agent crashes must not silently count as "failed" alongside leg
 
 ## Resilience
 
-- **Timeout**: default 30 min per agent run, configurable. Killed cleanly; patch captured up to kill point.
+- **Timeouts**: `--timeout N` (in minutes) sets the default for all four stages — setup, pre-flight, agent, grading. Override per stage with `--timeout-setup`, `--timeout-agent`, `--timeout-tests` (the last covers both pre-flight and grade since they run the same `test_cmd`). Useful when `pip install` (setup) routinely needs longer than the agent, or when grading is the bottleneck. Killed cleanly; patch captured up to kill point.
 - **Workdir cleanup**: default delete after run. `--keep-workdir` prints the path in the result JSON for debugging.
 - **Resume**: if any result file for the requested (task, agent) pair already exists in `results/`, skip with a warning. `--force` to overwrite. With `--repeat N`, runs whose index already has a result file are skipped; missing indices are run. Interrupted batches are restartable by re-running the same `cae run` command.
 - **Concurrency**: `--parallel N` runs multiple `(task, repeat-index)` units concurrently via a `ThreadPoolExecutor`. Each unit gets its own workdir (`tempfile.mkdtemp(prefix="cae-")` in `cae/harness.py`) and result file (the filename includes `instance_id` + repeat index, so concurrent writes don't collide). Default is `--parallel 1` (serial), which preserves the original v1 behavior byte-for-byte. Budget cap (`--max-cost-usd`) is best-effort under parallelism — each worker re-checks the shared `spent` total under a lock before starting, but up to N-1 in-flight units may overshoot.

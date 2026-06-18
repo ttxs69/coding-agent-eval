@@ -62,6 +62,9 @@ def _execute_run_unit(
     model: str | None,
     force: bool,
     dry_run: bool = False,
+    timeout_setup: int | None = None,
+    timeout_agent: int | None = None,
+    timeout_tests: int | None = None,
 ) -> tuple[float, str]:
     """Run ONE (task, repeat_index) pair end-to-end.
 
@@ -97,6 +100,9 @@ def _execute_run_unit(
         repeat=repeat,
         repeat_index=repeat_index,
         dry_run=dry_run,
+        timeout_setup=timeout_setup,
+        timeout_agent=timeout_agent,
+        timeout_tests=timeout_tests,
     )
     out = results_dir / f"{result['run_id']}.json"
     out.write_text(json.dumps(result, indent=2, default=str))
@@ -177,6 +183,9 @@ def cmd_run(args: argparse.Namespace) -> int:
                 model=args.model,
                 force=args.force,
                 dry_run=args.dry_run,
+                timeout_setup=args.timeout_setup * 60 if args.timeout_setup is not None else None,
+                timeout_agent=args.timeout_agent * 60 if args.timeout_agent is not None else None,
+                timeout_tests=args.timeout_tests * 60 if args.timeout_tests is not None else None,
             )
             if output:
                 print(output)
@@ -228,6 +237,9 @@ def cmd_run(args: argparse.Namespace) -> int:
                 model=args.model,
                 force=args.force,
                 dry_run=args.dry_run,
+                timeout_setup=args.timeout_setup * 60 if args.timeout_setup is not None else None,
+                timeout_agent=args.timeout_agent * 60 if args.timeout_agent is not None else None,
+                timeout_tests=args.timeout_tests * 60 if args.timeout_tests is not None else None,
             )
         except BaseException as e:
             # The harness is supposed to return task_error / agent_error
@@ -491,6 +503,18 @@ def build_parser() -> argparse.ArgumentParser:
     p_run.add_argument("--tasks-dir", default="tasks")
     p_run.add_argument("--results-dir", default="results")
     p_run.add_argument("--timeout", type=int, default=30, help="per-stage timeout in minutes")
+    p_run.add_argument("--timeout-setup", type=int, default=None,
+                      help="per-stage timeout in MINUTES, overrides --timeout for setup_cmd "
+                           "(default: falls back to --timeout). Useful when pip install / "
+                           "astropy build needs longer than the agent.")
+    p_run.add_argument("--timeout-agent", type=int, default=None,
+                      help="per-stage timeout in MINUTES, overrides --timeout for the agent "
+                           "subprocess (default: falls back to --timeout). The agent is "
+                           "usually the longest stage.")
+    p_run.add_argument("--timeout-tests", type=int, default=None,
+                      help="per-stage timeout in MINUTES, overrides --timeout for both "
+                           "pre-flight and grading (they run the same test_cmd). "
+                           "(default: falls back to --timeout)")
     p_run.add_argument("--workdir", default=None, help="pre-populated workdir (skips fetch)")
     p_run.add_argument("--fetch-fresh", action="store_true",
                       help="clone the repo from GitHub at base_commit instead of copying from tasks/<id>/repo/")
