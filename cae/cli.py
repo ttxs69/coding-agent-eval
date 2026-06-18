@@ -183,9 +183,9 @@ def cmd_run(args: argparse.Namespace) -> int:
                 model=args.model,
                 force=args.force,
                 dry_run=args.dry_run,
-                timeout_setup=args.timeout_setup * 60 if args.timeout_setup else None,
-                timeout_agent=args.timeout_agent * 60 if args.timeout_agent else None,
-                timeout_tests=args.timeout_tests * 60 if args.timeout_tests else None,
+                timeout_setup=args.timeout_setup * 60 if args.timeout_setup is not None else None,
+                timeout_agent=args.timeout_agent * 60 if args.timeout_agent is not None else None,
+                timeout_tests=args.timeout_tests * 60 if args.timeout_tests is not None else None,
             )
             if output:
                 print(output)
@@ -237,9 +237,9 @@ def cmd_run(args: argparse.Namespace) -> int:
                 model=args.model,
                 force=args.force,
                 dry_run=args.dry_run,
-                timeout_setup=args.timeout_setup * 60 if args.timeout_setup else None,
-                timeout_agent=args.timeout_agent * 60 if args.timeout_agent else None,
-                timeout_tests=args.timeout_tests * 60 if args.timeout_tests else None,
+                timeout_setup=args.timeout_setup * 60 if args.timeout_setup is not None else None,
+                timeout_agent=args.timeout_agent * 60 if args.timeout_agent is not None else None,
+                timeout_tests=args.timeout_tests * 60 if args.timeout_tests is not None else None,
             )
         except BaseException as e:
             # The harness is supposed to return task_error / agent_error

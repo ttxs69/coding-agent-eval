@@ -700,3 +700,50 @@ def test_cae_run_accepts_per_stage_timeout_flags(tmp_path, tiny_task_path):
     assert result.returncode != 2 or "unrecognized arguments" not in result.stderr, (
         f"argparse rejected the new flags: {result.stderr}"
     )
+
+
+def test_cae_run_per_stage_timeout_tests_aborts_long_running_pre_flight(
+    tmp_path, tiny_task_path,
+):
+    """End-to-end: --timeout-tests 0 (0 minutes = 0 seconds = immediate
+    timeout) against a task whose test_cmd sleeps 30s. Pre-flight must
+    abort almost immediately with task_error. Verifies the per-stage flag
+    actually changes behavior end-to-end, not just threads through."""
+    import time
+    proj = tmp_path
+    tasks = proj / "tasks" / "tiny_task"
+    tasks.mkdir(parents=True)
+    # Inject a slow test_cmd so we have something to interrupt.
+    task_json = json.loads((tiny_task_path / "task.json").read_text())
+    task_json["test_cmd"] = "sleep 30 && python -m pytest test_main.py -v"
+    (tasks / "task.json").write_text(json.dumps(task_json))
+    (tasks / "repo").mkdir(parents=True)
+    for child in (tiny_task_path / "repo").iterdir():
+        dest = tasks / "repo" / child.name
+        if child.is_dir():
+            shutil.copytree(child, dest)
+        else:
+            shutil.copy2(child, dest)
+    (proj / "results").mkdir()
+
+    start = time.monotonic()
+    result = subprocess.run(
+        [sys.executable, "-m", "cae", "run", "--agent", "mock",
+         "--task", "tiny_task",
+         "--timeout-tests", "0",  # 0 minutes = 0 seconds = immediate timeout
+         "--tasks-dir", str(proj / "tasks"),
+         "--results-dir", str(proj / "results")],
+        capture_output=True, text=True, timeout=60,
+    )
+    elapsed = time.monotonic() - start
+
+    # Pre-flight must have aborted quickly — well under the 30-second sleep.
+    assert elapsed < 25, f"pre-flight should have aborted in <25s; took {elapsed:.1f}s"
+    # The CLI exits 0 even on task_error (the harness records the status, doesn't crash).
+    assert result.returncode == 0, f"stderr: {result.stderr}"
+    files = list((proj / "results").glob("*.json"))
+    assert len(files) == 1
+    data = json.loads(files[0].read_text())
+    assert data["status"] == "task_error", (
+        f"expected task_error from pre-flight timeout, got {data['status']}"
+    )
