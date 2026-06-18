@@ -222,3 +222,27 @@ def test_mock_adapter_validate_env_returns_none():
     requirements. Locks the default behavior."""
     from cae.agents.mock import MockAdapter
     assert MockAdapter().validate_env() is None
+
+
+def test_real_adapters_satisfy_protocol():
+    """All registered adapters must satisfy isinstance(x, AgentAdapter).
+    Adding validate_env() to the Protocol made this fail for duck-typed
+    adapters (claude_code/codex/aider) that don't explicitly define the
+    method. Each adapter must override validate_env() — even just to
+    return None — to keep the runtime_checkable contract honest."""
+    from cae.agents import ADAPTERS
+    from cae.agents.base import AgentAdapter
+    failing = []
+    for name, cls in ADAPTERS.items():
+        # Instantiate; some adapters may take no constructor args.
+        try:
+            instance = cls()
+        except Exception as e:
+            failing.append(f"{name}: failed to instantiate ({e!r})")
+            continue
+        if not isinstance(instance, AgentAdapter):
+            failing.append(name)
+    assert not failing, (
+        f"these adapters fail isinstance(x, AgentAdapter): {failing}. "
+        f"Each must override validate_env() to satisfy the Protocol."
+    )

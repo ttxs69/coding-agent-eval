@@ -244,7 +244,7 @@ def run(
 
     _ensure_git_repo(workdir)
 
-    # 4.5: Validate agent environment (fail fast on missing API keys etc.).
+    # Pre-setup env validation: fail fast on missing API keys etc.
     # Runs BEFORE setup so a broken env doesn't waste the 1-10 minutes of
     # pip install / astropy build that setup often takes. Uses getattr
     # defensively so adapters that don't define validate_env() (e.g. older

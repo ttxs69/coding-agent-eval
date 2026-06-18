@@ -87,6 +87,14 @@ class ClaudeCodeAdapter:
 
         return None
 
+    def validate_env(self) -> str | None:
+        """Claude Code reads its API key from ANTHROPIC_API_KEY (or from
+        ~/.claude/settings.json). The CLI binary itself reports auth
+        failures interactively, so we only do a light check here —
+        the heavy validation is the CLI's job. Returns None (no
+        requirement) until a follow-up tightens this."""
+        return None
+
     def parse_output(self, stdout: str, stderr: str, exit_code: int) -> AgentResult:
         cost = None
         tokens_in = None
