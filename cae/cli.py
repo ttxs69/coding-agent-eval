@@ -491,6 +491,18 @@ def build_parser() -> argparse.ArgumentParser:
     p_run.add_argument("--tasks-dir", default="tasks")
     p_run.add_argument("--results-dir", default="results")
     p_run.add_argument("--timeout", type=int, default=30, help="per-stage timeout in minutes")
+    p_run.add_argument("--timeout-setup", type=int, default=None,
+                      help="per-stage timeout in MINUTES, overrides --timeout for setup_cmd "
+                           "(default: falls back to --timeout). Useful when pip install / "
+                           "astropy build needs longer than the agent.")
+    p_run.add_argument("--timeout-agent", type=int, default=None,
+                      help="per-stage timeout in MINUTES, overrides --timeout for the agent "
+                           "subprocess (default: falls back to --timeout). The agent is "
+                           "usually the longest stage.")
+    p_run.add_argument("--timeout-tests", type=int, default=None,
+                      help="per-stage timeout in MINUTES, overrides --timeout for both "
+                           "pre-flight and grading (they run the same test_cmd). "
+                           "(default: falls back to --timeout)")
     p_run.add_argument("--workdir", default=None, help="pre-populated workdir (skips fetch)")
     p_run.add_argument("--fetch-fresh", action="store_true",
                       help="clone the repo from GitHub at base_commit instead of copying from tasks/<id>/repo/")

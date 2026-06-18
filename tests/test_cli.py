@@ -666,3 +666,37 @@ def test_cae_run_dry_run_with_parallel_produces_all_dry_run_results(
         )
         assert data["would_run_command"], f"{f.name}: empty would_run_command"
         assert data["patch"] == "", f"{f.name}: patch should be empty under --dry-run"
+
+
+def test_cae_run_accepts_per_stage_timeout_flags(tmp_path, tiny_task_path):
+    """`--timeout-setup`, `--timeout-agent`, `--timeout-tests` are accepted
+    by argparse (do NOT yet behave differently — that comes in Task 2).
+    Verifies the CLI surface before any run-logic changes."""
+    proj = tmp_path
+    tasks = proj / "tasks" / "tiny_task"
+    tasks.mkdir(parents=True)
+    (tasks / "task.json").write_text((tiny_task_path / "task.json").read_text())
+    (tasks / "repo").mkdir(parents=True)
+    for child in (tiny_task_path / "repo").iterdir():
+        dest = tasks / "repo" / child.name
+        if child.is_dir():
+            shutil.copytree(child, dest)
+        else:
+            shutil.copy2(child, dest)
+    (proj / "results").mkdir()
+
+    result = subprocess.run(
+        [sys.executable, "-m", "cae", "run", "--agent", "mock",
+         "--task", "tiny_task",
+         "--timeout-setup", "5",
+         "--timeout-agent", "10",
+         "--timeout-tests", "3",
+         "--tasks-dir", str(proj / "tasks"),
+         "--results-dir", str(proj / "results")],
+        capture_output=True, text=True,
+    )
+    # Argparse must accept the flags — exit code 0 OR a runtime error is fine,
+    # but NOT an argparse error (exit code 2 with "unrecognized" wording).
+    assert result.returncode != 2 or "unrecognized arguments" not in result.stderr, (
+        f"argparse rejected the new flags: {result.stderr}"
+    )
