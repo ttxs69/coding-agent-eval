@@ -62,6 +62,9 @@ def _execute_run_unit(
     model: str | None,
     force: bool,
     dry_run: bool = False,
+    timeout_setup: int | None = None,
+    timeout_agent: int | None = None,
+    timeout_tests: int | None = None,
 ) -> tuple[float, str]:
     """Run ONE (task, repeat_index) pair end-to-end.
 
@@ -97,6 +100,9 @@ def _execute_run_unit(
         repeat=repeat,
         repeat_index=repeat_index,
         dry_run=dry_run,
+        timeout_setup=timeout_setup,
+        timeout_agent=timeout_agent,
+        timeout_tests=timeout_tests,
     )
     out = results_dir / f"{result['run_id']}.json"
     out.write_text(json.dumps(result, indent=2, default=str))
@@ -177,6 +183,9 @@ def cmd_run(args: argparse.Namespace) -> int:
                 model=args.model,
                 force=args.force,
                 dry_run=args.dry_run,
+                timeout_setup=args.timeout_setup * 60 if args.timeout_setup else None,
+                timeout_agent=args.timeout_agent * 60 if args.timeout_agent else None,
+                timeout_tests=args.timeout_tests * 60 if args.timeout_tests else None,
             )
             if output:
                 print(output)
@@ -228,6 +237,9 @@ def cmd_run(args: argparse.Namespace) -> int:
                 model=args.model,
                 force=args.force,
                 dry_run=args.dry_run,
+                timeout_setup=args.timeout_setup * 60 if args.timeout_setup else None,
+                timeout_agent=args.timeout_agent * 60 if args.timeout_agent else None,
+                timeout_tests=args.timeout_tests * 60 if args.timeout_tests else None,
             )
         except BaseException as e:
             # The harness is supposed to return task_error / agent_error

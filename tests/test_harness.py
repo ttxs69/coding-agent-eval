@@ -434,3 +434,57 @@ def test_dry_run_skips_is_available_check(tmp_path, tiny_task_path, monkeypatch)
         "fake-agent-binary", "--workdir", str(workdir),
         "--prompt", "Fix the add() function so it returns a + b instead of a - b.",
     ], result["would_run_command"]
+
+
+def test_run_threads_per_stage_timeouts_to_run_step(
+    tmp_path, tiny_task_path, fixing_mock, monkeypatch,
+):
+    """Per-stage timeouts (timeout_setup, timeout_agent, timeout_tests) must
+    reach the underlying subprocess dispatcher with their distinct values.
+    We spy on _run_subprocess to verify each stage is invoked with its
+    specific timeout — not the global default."""
+    from cae.harness import run as harness_run
+    import cae.harness as harness_mod
+
+    repo_src = tiny_task_path / "repo"
+    workdir = tmp_path / "workdir"
+    subprocess.run(["cp", "-r", str(repo_src), str(workdir)], check=True)
+    subprocess.run(["git", "init", "-q"], cwd=workdir, check=True)
+    subprocess.run(["git", "config", "user.email", "t@x"], cwd=workdir, check=True)
+    subprocess.run(["git", "config", "user.name", "t"], cwd=workdir, check=True)
+    subprocess.run(["git", "add", "."], cwd=workdir, check=True)
+    subprocess.run(["git", "commit", "-q", "-m", "init"], cwd=workdir, check=True)
+
+    # Spy on _run_subprocess to capture the timeout each call used.
+    captured: list[int] = []
+    real_run_subprocess = harness_mod._run_subprocess
+    def spy(cmd, cwd, timeout):
+        captured.append(timeout)
+        return real_run_subprocess(cmd, cwd, timeout)
+
+    monkeypatch.setattr(harness_mod, "_run_subprocess", spy)
+
+    harness_run(
+        task_path=tiny_task_path,
+        agent_name="mock",
+        workdir=workdir,
+        timeout_sec=999,           # global default — should NOT be used
+        timeout_setup=11,
+        timeout_agent=22,
+        timeout_tests=33,
+    )
+
+    # The harness makes these _run_subprocess calls in order:
+    #   1. pre-flight test_cmd (timeout_tests=33)
+    #   2. agent build_command result (timeout_agent=22)
+    #   3. grade test_cmd (timeout_tests=33)
+    # (setup_cmd is empty for tiny_task so no setup call.)
+    assert 22 in captured, f"agent timeout not threaded through: {captured}"
+    assert captured.count(33) >= 2, (
+        f"expected at least 2 test_cmd calls (pre-flight + grade) with "
+        f"timeout_tests=33; got {captured}"
+    )
+    # The global 999 default must NOT appear anywhere — per-stage values win.
+    assert 999 not in captured, (
+        f"per-stage timeouts didn't override the global default: {captured}"
+    )

@@ -156,6 +156,9 @@ def run(
     repeat: int = 1,
     repeat_index: int | None = None,
     dry_run: bool = False,
+    timeout_setup: int | None = None,
+    timeout_agent: int | None = None,
+    timeout_tests: int | None = None,
 ) -> dict:
     """Run a single (task, agent) pair through the full harness. Return the result dict.
 
@@ -163,7 +166,12 @@ def run(
         task_path: path to a directory containing task.json (and optional tests.patch, repo/).
         agent_name: name of a registered adapter (e.g. "mock", "claude-code").
         workdir: optional pre-populated workdir. If None, harness creates a tempdir.
-        timeout_sec: per-stage timeout (setup, pre-flight, agent, grading).
+        timeout_sec: per-stage fallback timeout (setup, pre-flight, agent, grading)
+            in seconds. Used when a stage-specific override isn't provided.
+        timeout_setup: optional override (seconds) for setup_cmd only.
+        timeout_agent: optional override (seconds) for the agent subprocess only.
+        timeout_tests: optional override (seconds) for pre-flight AND grade
+            (they run the same test_cmd, so they share one value).
         fetch_fresh: if True (and workdir is auto-created), clone repo at base_commit
             from GitHub instead of copying from task_path/repo/.
         keep_workdir: if True, don't delete the workdir after the run.
@@ -270,7 +278,7 @@ def run(
 
     # 5: Setup
     if task.get("setup_cmd"):
-        setup_rc, setup_out, setup_err, _ = run_step(task["setup_cmd"], workdir, timeout=timeout_sec)
+        setup_rc, setup_out, setup_err, _ = run_step(task["setup_cmd"], workdir, timeout=timeout_setup or timeout_sec)
         if setup_rc != 0:
             # Include stdout in the error message too — the actual failure
             # is often in stdout (e.g. pip install writes to stdout). Cap the
@@ -282,7 +290,7 @@ def run(
                            f"setup_cmd failed (rc={setup_rc}): {err_blob[:5000]}", started_at=started_at, agent_model=agent_model)
 
     # 6: Pre-flight
-    pre = _run_tests(task["test_cmd"], workdir, timeout=timeout_sec, run_subprocess=run_step)
+    pre = _run_tests(task["test_cmd"], workdir, timeout=timeout_tests or timeout_sec, run_subprocess=run_step)
     pre_flight = {"fail_to_pass": {n: pre.get(n, TestStatus.ERROR).value for n in fail_to_pass},
                   "pass_to_pass": {n: pre.get(n, TestStatus.ERROR).value for n in pass_to_pass}}
     # validate: fail_to_pass tests should currently fail, pass_to_pass should currently pass
@@ -331,10 +339,11 @@ def run(
     if not adapter.is_available():
         return _result(task, agent_name, mode, Status.AGENT_ERROR, agent_version, pre_flight, pre_flight, "",
                        str(workdir), f"agent {agent_name} not available", started_at=started_at, agent_model=agent_model)
-    agent_rc, agent_stdout, agent_stderr, duration = run_step(cmd, workdir, timeout=timeout_sec)
+    effective_agent_timeout = timeout_agent or timeout_sec
+    agent_rc, agent_stdout, agent_stderr, duration = run_step(cmd, workdir, timeout=effective_agent_timeout)
     if agent_rc == -1:
         return _result(task, agent_name, mode, Status.TIMEOUT, agent_version, pre_flight, pre_flight, "",
-                       str(workdir), f"agent timed out after {timeout_sec}s", started_at=started_at, agent_model=agent_model)
+                       str(workdir), f"agent timed out after {effective_agent_timeout}s", started_at=started_at, agent_model=agent_model)
     parsed = adapter.parse_output(agent_stdout, agent_stderr, agent_rc)
     if parsed.exit_code != 0:
         return _result(task, agent_name, mode, Status.AGENT_ERROR, agent_version, pre_flight, pre_flight, "",
@@ -346,7 +355,7 @@ def run(
     patch = diff_proc.stdout
 
     # 9: Grade
-    post = _run_tests(task["test_cmd"], workdir, timeout=timeout_sec, run_subprocess=run_step)
+    post = _run_tests(task["test_cmd"], workdir, timeout=timeout_tests or timeout_sec, run_subprocess=run_step)
     post_flight = {"fail_to_pass": {n: post.get(n, TestStatus.ERROR).value for n in fail_to_pass},
                    "pass_to_pass": {n: post.get(n, TestStatus.ERROR).value for n in pass_to_pass}}
     status = grade({"fail_to_pass": {n: TestStatus(v) for n, v in pre_flight["fail_to_pass"].items()},
