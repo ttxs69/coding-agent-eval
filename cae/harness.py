@@ -243,6 +243,25 @@ def run(
         agent_model = model or getattr(adapter, "default_model", None)
 
     _ensure_git_repo(workdir)
+
+    # Pre-setup env validation: fail fast on missing API keys etc.
+    # Runs BEFORE setup so a broken env doesn't waste the 1-10 minutes of
+    # pip install / astropy build that setup often takes. Uses getattr
+    # defensively so adapters that don't define validate_env() (e.g. older
+    # third-party adapters) are treated as "no requirement". Skipped under
+    # --dry-run because dry-run is for inspection.
+    if not dry_run:
+        _validate_env = getattr(adapter, "validate_env", None)
+        if _validate_env is not None:
+            try:
+                env_problem = _validate_env()
+            except Exception as e:
+                env_problem = f"validate_env() raised: {e!r}"
+            if env_problem:
+                return _result(task, agent_name, mode, Status.AGENT_ERROR, agent_version, {}, {}, "",
+                               str(workdir), f"agent environment invalid: {env_problem}",
+                               started_at=started_at, agent_model=agent_model)
+
     if not _apply_test_patch(workdir, task_dir):
         return _result(task, agent_name, mode, Status.TASK_ERROR, agent_version, {}, {}, "", str(workdir),
                        f"could not apply tests.patch — workdir is empty (use --fetch-fresh or "

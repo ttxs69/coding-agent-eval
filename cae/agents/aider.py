@@ -30,6 +30,13 @@ class AiderAdapter:
         except Exception as e:
             return f"unknown ({e})"
 
+    def validate_env(self) -> str | None:
+        """Aider supports multiple backends (Anthropic, OpenAI, local LLMs),
+        each with its own env requirements. The backend is chosen at runtime
+        via --model, so we can't check generically here. Returns None until
+        a follow-up adds per-backend checks."""
+        return None
+
     def build_command(self, workdir: Path, prompt: str, *, model: str | None) -> list[str]:
         cmd = ["aider", "--yes", "--message", prompt, "--no-auto-commits"]
         if model:

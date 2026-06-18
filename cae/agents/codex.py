@@ -30,6 +30,12 @@ class CodexAdapter:
         except Exception as e:
             return f"unknown ({e})"
 
+    def validate_env(self) -> str | None:
+        """Codex CLI reads its API key from OPENAI_API_KEY (or its own
+        config). The CLI handles auth failures itself, so we only do a
+        light check here. Returns None until a follow-up tightens this."""
+        return None
+
     def build_command(self, workdir: Path, prompt: str, *, model: str | None) -> list[str]:
         cmd = [
             "codex", "exec", prompt,

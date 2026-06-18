@@ -488,3 +488,209 @@ def test_run_threads_per_stage_timeouts_to_run_step(
     assert 999 not in captured, (
         f"per-stage timeouts didn't override the global default: {captured}"
     )
+
+
+def test_harness_agent_errors_when_validate_env_returns_a_message(
+    tmp_path, tiny_task_path, monkeypatch,
+):
+    """When validate_env() returns a non-None message, the harness must:
+    1. Return status='agent_error'
+    2. Include the message in the error field
+    3. NOT execute setup_cmd (proving the check ran before setup)
+    """
+    from cae.agents import ADAPTERS
+    from cae.agents.mock import MockAdapter
+    from cae.harness import run as harness_run
+
+    class _BadEnvMock(MockAdapter):
+        name = "bad-env-mock"
+        default_model = "test-model-1"
+        def validate_env(self) -> str | None:
+            return "ANTHROPIC_API_KEY not set"
+
+    # Set up workdir with a setup_cmd that creates a marker file.
+    # If validate_env() runs BEFORE setup, the marker file is never created.
+    repo_src = tiny_task_path / "repo"
+    workdir = tmp_path / "workdir"
+    subprocess.run(["cp", "-r", str(repo_src), str(workdir)], check=True)
+    subprocess.run(["git", "init", "-q"], cwd=workdir, check=True)
+    subprocess.run(["git", "config", "user.email", "t@x"], cwd=workdir, check=True)
+    subprocess.run(["git", "config", "user.name", "t"], cwd=workdir, check=True)
+    subprocess.run(["git", "add", "."], cwd=workdir, check=True)
+    subprocess.run(["git", "commit", "-q", "-m", "init"], cwd=workdir, check=True)
+
+    # Use a custom task.json that includes a setup_cmd creating a marker.
+    import json
+    bad_task = tmp_path / "bad_task"
+    bad_task.mkdir()
+    task_data = json.loads((tiny_task_path / "task.json").read_text())
+    task_data["setup_cmd"] = f"touch {workdir / 'SETUP_RAN.marker'}"
+    (bad_task / "task.json").write_text(json.dumps(task_data))
+
+    ADAPTERS["bad-env-mock"] = _BadEnvMock
+    try:
+        result = harness_run(
+            task_path=bad_task,
+            agent_name="bad-env-mock",
+            workdir=workdir,
+            timeout_sec=30,
+        )
+    finally:
+        ADAPTERS.pop("bad-env-mock", None)
+
+    assert result["status"] == "agent_error", (
+        f"expected agent_error, got {result['status']}"
+    )
+    assert "ANTHROPIC_API_KEY" in (result["error"] or ""), result["error"]
+    # The marker file must NOT exist — setup didn't run.
+    assert not (workdir / "SETUP_RAN.marker").exists(), (
+        "setup_cmd ran anyway — validate_env check is in the wrong place "
+        "(must run BEFORE setup)"
+    )
+
+
+def test_dry_run_skips_validate_env_check(
+    tmp_path, tiny_task_path, monkeypatch,
+):
+    """--dry-run should NOT be blocked by validate_env(). Dry-run is for
+    inspection ('what would this batch invoke?') and must work even on
+    machines with missing API keys, so users can sanity-check before
+    fixing the env. The cost-saving validate_env check applies only to
+    real runs."""
+    from cae.agents import ADAPTERS
+    from cae.agents.mock import MockAdapter
+    from cae.harness import run as harness_run
+
+    class _BadEnvMock(MockAdapter):
+        name = "bad-env-mock-2"
+        default_model = "test-model-1"
+        def validate_env(self) -> str | None:
+            return "ANTHROPIC_API_KEY not set"
+        def build_command(self, workdir, prompt, *, model):
+            return ["fake-binary", "--prompt", prompt]
+
+    repo_src = tiny_task_path / "repo"
+    workdir = tmp_path / "workdir"
+    subprocess.run(["cp", "-r", str(repo_src), str(workdir)], check=True)
+    subprocess.run(["git", "init", "-q"], cwd=workdir, check=True)
+    subprocess.run(["git", "config", "user.email", "t@x"], cwd=workdir, check=True)
+    subprocess.run(["git", "config", "user.name", "t"], cwd=workdir, check=True)
+    subprocess.run(["git", "add", "."], cwd=workdir, check=True)
+    subprocess.run(["git", "commit", "-q", "-m", "init"], cwd=workdir, check=True)
+
+    ADAPTERS["bad-env-mock-2"] = _BadEnvMock
+    try:
+        result = harness_run(
+            task_path=tiny_task_path,
+            agent_name="bad-env-mock-2",
+            workdir=workdir,
+            timeout_sec=30,
+            dry_run=True,
+        )
+    finally:
+        ADAPTERS.pop("bad-env-mock-2", None)
+
+    assert result["status"] == "dry_run", (
+        f"--dry-run must short-circuit BEFORE validate_env; got {result['status']}"
+    )
+    assert result["would_run_command"], "dry-run result should have would_run_command"
+
+
+def test_harness_catches_validate_env_exceptions(
+    tmp_path, tiny_task_path, monkeypatch,
+):
+    """If validate_env() itself raises (e.g., an OSError looking up env
+    vars), the harness must catch it and return agent_error with the
+    exception in the message — NOT crash the run."""
+    from cae.agents import ADAPTERS
+    from cae.agents.mock import MockAdapter
+    from cae.harness import run as harness_run
+
+    class _RaisingMock(MockAdapter):
+        name = "raising-mock"
+        default_model = "test-model-1"
+        def validate_env(self) -> str | None:
+            raise OSError("kaboom from validate_env")
+
+    repo_src = tiny_task_path / "repo"
+    workdir = tmp_path / "workdir"
+    subprocess.run(["cp", "-r", str(repo_src), str(workdir)], check=True)
+    subprocess.run(["git", "init", "-q"], cwd=workdir, check=True)
+    subprocess.run(["git", "config", "user.email", "t@x"], cwd=workdir, check=True)
+    subprocess.run(["git", "config", "user.name", "t"], cwd=workdir, check=True)
+    subprocess.run(["git", "add", "."], cwd=workdir, check=True)
+    subprocess.run(["git", "commit", "-q", "-m", "init"], cwd=workdir, check=True)
+
+    ADAPTERS["raising-mock"] = _RaisingMock
+    try:
+        result = harness_run(
+            task_path=tiny_task_path,
+            agent_name="raising-mock",
+            workdir=workdir,
+            timeout_sec=30,
+        )
+    finally:
+        ADAPTERS.pop("raising-mock", None)
+
+    assert result["status"] == "agent_error", (
+        f"expected agent_error, got {result['status']}"
+    )
+    err = result["error"] or ""
+    assert "validate_env() raised" in err, err
+    assert "OSError" in err or "kaboom" in err, err
+
+
+def test_harness_tolerates_adapter_without_validate_env(
+    tmp_path, tiny_task_path, monkeypatch,
+):
+    """If an adapter doesn't define validate_env() at all (e.g., a
+    third-party adapter written before the method existed), the harness's
+    getattr fallback must skip the check entirely — no AttributeError,
+    no agent_error. The run proceeds normally."""
+    from cae.agents import ADAPTERS
+    from cae.agents.base import AgentResult, UsageInfo
+    from cae.harness import run as harness_run
+
+    class _LegacyAdapter:
+        """A duck-typed adapter with the original 4 methods (no validate_env).
+        Simulates a third-party adapter that hasn't been updated."""
+        name = "legacy-mock"
+        default_model = "test-model-1"
+        def is_available(self): return True
+        def version(self): return "legacy-0.1.0"
+        def build_command(self, workdir, prompt, *, model):
+            return ["python3", "-c", "import sys; sys.exit(0)"]
+        def parse_output(self, stdout, stderr, exit_code):
+            return AgentResult(
+                log=stdout + stderr,
+                usage=UsageInfo(tokens_in=0, tokens_out=0, cost_usd=0.0,
+                                model="test-model-1", billing_mode="api"),
+                exit_code=exit_code,
+            )
+
+    repo_src = tiny_task_path / "repo"
+    workdir = tmp_path / "workdir"
+    subprocess.run(["cp", "-r", str(repo_src), str(workdir)], check=True)
+    subprocess.run(["git", "init", "-q"], cwd=workdir, check=True)
+    subprocess.run(["git", "config", "user.email", "t@x"], cwd=workdir, check=True)
+    subprocess.run(["git", "config", "user.name", "t"], cwd=workdir, check=True)
+    subprocess.run(["git", "add", "."], cwd=workdir, check=True)
+    subprocess.run(["git", "commit", "-q", "-m", "init"], cwd=workdir, check=True)
+
+    ADAPTERS["legacy-mock"] = _LegacyAdapter
+    try:
+        result = harness_run(
+            task_path=tiny_task_path,
+            agent_name="legacy-mock",
+            workdir=workdir,
+            timeout_sec=30,
+        )
+    finally:
+        ADAPTERS.pop("legacy-mock", None)
+
+    # The run must NOT have failed with agent_error / AttributeError.
+    # Whatever else happened (resolved / failed / etc.), the validate_env
+    # getattr fallback worked.
+    assert result["status"] != "agent_error" or "validate_env" not in (result["error"] or ""), (
+        f"validate_env path broke for legacy adapter: {result['status']!r} / {result['error']!r}"
+    )
