@@ -488,3 +488,62 @@ def test_run_threads_per_stage_timeouts_to_run_step(
     assert 999 not in captured, (
         f"per-stage timeouts didn't override the global default: {captured}"
     )
+
+
+def test_harness_agent_errors_when_validate_env_returns_a_message(
+    tmp_path, tiny_task_path, monkeypatch,
+):
+    """When validate_env() returns a non-None message, the harness must:
+    1. Return status='agent_error'
+    2. Include the message in the error field
+    3. NOT execute setup_cmd (proving the check ran before setup)
+    """
+    from cae.agents import ADAPTERS
+    from cae.agents.mock import MockAdapter
+    from cae.harness import run as harness_run
+
+    class _BadEnvMock(MockAdapter):
+        name = "bad-env-mock"
+        default_model = "test-model-1"
+        def validate_env(self) -> str | None:
+            return "ANTHROPIC_API_KEY not set"
+
+    # Set up workdir with a setup_cmd that creates a marker file.
+    # If validate_env() runs BEFORE setup, the marker file is never created.
+    repo_src = tiny_task_path / "repo"
+    workdir = tmp_path / "workdir"
+    subprocess.run(["cp", "-r", str(repo_src), str(workdir)], check=True)
+    subprocess.run(["git", "init", "-q"], cwd=workdir, check=True)
+    subprocess.run(["git", "config", "user.email", "t@x"], cwd=workdir, check=True)
+    subprocess.run(["git", "config", "user.name", "t"], cwd=workdir, check=True)
+    subprocess.run(["git", "add", "."], cwd=workdir, check=True)
+    subprocess.run(["git", "commit", "-q", "-m", "init"], cwd=workdir, check=True)
+
+    # Use a custom task.json that includes a setup_cmd creating a marker.
+    import json
+    bad_task = tmp_path / "bad_task"
+    bad_task.mkdir()
+    task_data = json.loads((tiny_task_path / "task.json").read_text())
+    task_data["setup_cmd"] = f"touch {workdir / 'SETUP_RAN.marker'}"
+    (bad_task / "task.json").write_text(json.dumps(task_data))
+
+    ADAPTERS["bad-env-mock"] = _BadEnvMock
+    try:
+        result = harness_run(
+            task_path=bad_task,
+            agent_name="bad-env-mock",
+            workdir=workdir,
+            timeout_sec=30,
+        )
+    finally:
+        ADAPTERS.pop("bad-env-mock", None)
+
+    assert result["status"] == "agent_error", (
+        f"expected agent_error, got {result['status']}"
+    )
+    assert "ANTHROPIC_API_KEY" in (result["error"] or ""), result["error"]
+    # The marker file must NOT exist — setup didn't run.
+    assert not (workdir / "SETUP_RAN.marker").exists(), (
+        "setup_cmd ran anyway — validate_env check is in the wrong place "
+        "(must run BEFORE setup)"
+    )
