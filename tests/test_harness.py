@@ -547,3 +547,50 @@ def test_harness_agent_errors_when_validate_env_returns_a_message(
         "setup_cmd ran anyway — validate_env check is in the wrong place "
         "(must run BEFORE setup)"
     )
+
+
+def test_dry_run_skips_validate_env_check(
+    tmp_path, tiny_task_path, monkeypatch,
+):
+    """--dry-run should NOT be blocked by validate_env(). Dry-run is for
+    inspection ('what would this batch invoke?') and must work even on
+    machines with missing API keys, so users can sanity-check before
+    fixing the env. The cost-saving validate_env check applies only to
+    real runs."""
+    from cae.agents import ADAPTERS
+    from cae.agents.mock import MockAdapter
+    from cae.harness import run as harness_run
+
+    class _BadEnvMock(MockAdapter):
+        name = "bad-env-mock-2"
+        default_model = "test-model-1"
+        def validate_env(self) -> str | None:
+            return "ANTHROPIC_API_KEY not set"
+        def build_command(self, workdir, prompt, *, model):
+            return ["fake-binary", "--prompt", prompt]
+
+    repo_src = tiny_task_path / "repo"
+    workdir = tmp_path / "workdir"
+    subprocess.run(["cp", "-r", str(repo_src), str(workdir)], check=True)
+    subprocess.run(["git", "init", "-q"], cwd=workdir, check=True)
+    subprocess.run(["git", "config", "user.email", "t@x"], cwd=workdir, check=True)
+    subprocess.run(["git", "config", "user.name", "t"], cwd=workdir, check=True)
+    subprocess.run(["git", "add", "."], cwd=workdir, check=True)
+    subprocess.run(["git", "commit", "-q", "-m", "init"], cwd=workdir, check=True)
+
+    ADAPTERS["bad-env-mock-2"] = _BadEnvMock
+    try:
+        result = harness_run(
+            task_path=tiny_task_path,
+            agent_name="bad-env-mock-2",
+            workdir=workdir,
+            timeout_sec=30,
+            dry_run=True,
+        )
+    finally:
+        ADAPTERS.pop("bad-env-mock-2", None)
+
+    assert result["status"] == "dry_run", (
+        f"--dry-run must short-circuit BEFORE validate_env; got {result['status']}"
+    )
+    assert result["would_run_command"], "dry-run result should have would_run_command"
