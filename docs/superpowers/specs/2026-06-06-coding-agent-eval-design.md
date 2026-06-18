@@ -180,6 +180,8 @@ The harness captures the patch uniformly via `git diff` on the workdir — we do
 
 `cae list-agents` calls `is_available()` on every registered adapter and prints a table of which ones are usable in the current environment. Pre-run, the harness re-checks `is_available()` for each requested agent and fails fast with a clear error if any are missing — no mid-run "command not found" surprises.
 
+Adapters may optionally implement `validate_env() -> str | None` — return `None` if the runtime environment is OK (API keys set, config readable, etc.); return a short human-readable message otherwise. The harness calls this BEFORE `setup_cmd` (at step 4.5, right after agent-identity capture) so a broken env fails fast — saving the 1–10 minutes of `pip install` / astropy build that would otherwise happen first. Skipped under `--dry-run` (dry-run is for inspection and must work even when env is broken). Adapters that don't define it inherit the implicit "no requirement" default via `getattr`.
+
 A `MockAdapter` ships as a first-class adapter (registered alongside Claude Code / Codex / Aider) for use in tests and smoke runs. It writes a pre-canned patch from the test fixture to the workdir, so the full harness can be exercised without API keys. It is clearly marked as a test-only adapter in `cae list-agents`.
 
 **`MockAdapter` results are excluded from the public leaderboard.** `cae build-site` filters out any result whose `agent` field is `mock`. (Test runs still produce result JSON for local development; only the aggregation step filters them out.)
