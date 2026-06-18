@@ -57,3 +57,7 @@ class MockAdapter:
             exit_code=exit_code,
             duration_sec=0.0,
         )
+
+    def validate_env(self) -> str | None:
+        """Mock has no env requirements — always returns None."""
+        return None

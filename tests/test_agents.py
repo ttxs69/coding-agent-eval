@@ -194,3 +194,31 @@ def test_aider_parse_output_no_native_json():
     assert result.usage.cost_usd is None
     assert result.usage.tokens_in is None
     assert result.exit_code == 0
+
+
+def test_validate_env_is_part_of_protocol():
+    """The AgentAdapter Protocol declares validate_env() so the harness
+    can fail fast on missing API keys / config before setup runs."""
+    from cae.agents.base import AgentAdapter
+    # runtime_checkable Protocols check method existence via hasattr.
+    # A class with all four existing methods but NOT validate_env should
+    # NOT satisfy the Protocol after we add the method.
+    class _MissingValidateEnv:
+        name = "x"
+        default_model = None
+        def is_available(self): return True
+        def version(self): return "x"
+        def build_command(self, workdir, prompt, *, model): return []
+        def parse_output(self, stdout, stderr, exit_code):
+            from cae.agents.base import AgentResult
+            return AgentResult()
+    assert not isinstance(_MissingValidateEnv(), AgentAdapter), (
+        "Protocol must require validate_env() after Task 1"
+    )
+
+
+def test_mock_adapter_validate_env_returns_none():
+    """MockAdapter's validate_env() returns None — mock has no env
+    requirements. Locks the default behavior."""
+    from cae.agents.mock import MockAdapter
+    assert MockAdapter().validate_env() is None

@@ -112,3 +112,17 @@ class AgentAdapter(Protocol):
         NOT try to parse the patch from agent output.
         """
         ...
+
+    def validate_env(self) -> str | None:
+        """Return None if the runtime environment is OK (API keys set,
+        config files readable, etc.); otherwise return a short human-
+        readable description of the problem (e.g. ``"ANTHROPIC_API_KEY
+        not set and ~/.claude/settings.json has no API key"``).
+
+        The harness calls this BEFORE setup so a broken env fails fast
+        — saving the 1–10 minutes of pip install / astropy build that
+        would otherwise happen before the agent subprocess discovers
+        the problem. Default for adapters that don't override: None
+        (no specific requirement).
+        """
+        ...
