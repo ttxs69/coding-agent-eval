@@ -29,11 +29,58 @@
 # Written for POSIX sh (not bash) so it works regardless of which shell
 # the harness invokes. Uses `uv run` so the venv's cae/pytest is on PATH
 # without needing a manual `source .venv/bin/activate`.
+#
+# This script applies three SWE-bench-on-modern-host workarounds before
+# the eval starts (see "Common gotchas" in CLAUDE.md for the why):
+#   1. scripts/patch_astropy_collections.sh  — rewrites collections.X →
+#      collections.abc.X in task repos (Python 3.10 removed the aliases).
+#      Idempotent; safe to re-run.
+#   2. numpy<2 check  — old astropy uses np.product (removed in numpy 2.0).
+#      Errors out with a clear message if numpy>=2 is installed.
+#   3. PYTEST_ADDOPTS=-p no:cacheprovider  — pytest 9.x crashes on old
+#      astropy's setup.cfg cache_dir config.
 set -u
 cd "$(dirname "$0")/.."
 
+# Handle --help / -h before any side-effectful setup so the user can read
+# the help even if the venv isn't ready.
+case "${1:-}" in
+  -h|--help)
+    sed -n '2,29p' "$0"
+    exit 0
+    ;;
+esac
+
 # Make sure deps are installed (idempotent; no-op if already synced).
 uv sync --extra dev --extra astropy-build >/dev/null 2>&1
+
+# Workaround 1: apply the collections.abc patch (idempotent).
+sh scripts/patch_astropy_collections.sh tasks >/dev/null
+
+# Workaround 2: pin numpy<2 — old astropy uses np.product (removed in 2.0).
+# uv sync may have installed numpy 2.x transitively; downgrade it back.
+# Idempotent: no-op if numpy is already <2. We don't add numpy<2 to the
+# astropy-build extra in pyproject.toml because that would conflict with
+# the `importer` extra (datasets requires numpy 2.x). See CLAUDE.md
+# "Common gotchas" → "astropy + numpy 2.x".
+NUMPY_VERSION=$(uv run python -c "import numpy; print(numpy.__version__)" 2>/dev/null || echo "unknown")
+case "$NUMPY_VERSION" in
+  1.*)
+    : # already <2, nothing to do
+    ;;
+  2.*|unknown)
+    uv pip install 'numpy<2' >/dev/null 2>&1 || {
+      echo "error: failed to downgrade numpy to <2. Old astropy needs it." >&2
+      echo "       Manual fix: uv pip install 'numpy<2'" >&2
+      exit 2
+    }
+    NEW_VERSION=$(uv run python -c "import numpy; print(numpy.__version__)" 2>/dev/null || echo "?")
+    echo "[run_eval] numpy downgraded: $NUMPY_VERSION → $NEW_VERSION (old astropy requires <2)"
+    ;;
+esac
+
+# Workaround 3 + CFLAGS: env vars for the harness subprocess.
+export PYTEST_ADDOPTS="-p no:cacheprovider"
 
 # CFLAGS for old astropy's Cython-generated C. The wcslib wrappers
 # trigger pointer-type mismatches (and clang also fires function-pointer-
