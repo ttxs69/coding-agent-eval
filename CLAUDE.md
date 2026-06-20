@@ -92,7 +92,9 @@ Tests live in `tests/`. The tiny task fixture in `tests/fixtures/tiny_task/` is 
 ## Sites & deployment
 
 - `site/` is gitignored — it's a build artifact.
-- The site is deployed to the `gh-pages` branch via `git worktree` + `git push --force-with-lease`. The harness's `cae build-site --publish` (which uses `git subtree push`) does NOT work when the remote `gh-pages` has diverged — the manual worktree workflow is the reliable path. Live site: <https://ttxs69.github.io/coding-agent-eval/>.
+- The site is deployed to the `gh-pages` branch via `scripts/deploy_site.sh` (uses `git worktree` + `rsync` without `--delete` + `git push --force-with-lease`). The script is **non-destructive**: detail files on `gh-pages` that aren't in the current build (e.g. historical result details from previous evals) are preserved. To remove stale files from `gh-pages`, edit the worktree manually or run rsync with `--delete` locally — don't make destructive deploys the default.
+- **Leaderboard vs detail archive:** `index.html` reflects only what's in local `results/`. The `data/details/*.json` archive accumulates across deploys and is what per-task drill-down pages render against. If local `results/` is a subset of history, the main leaderboard will show fewer tasks than the per-task pages — known limitation, fix would require `cae build-site` to merge `gh-pages/data/details/` into its aggregation pass.
+- Live site: <https://ttxs69.github.io/coding-agent-eval/>.
 
 ## Common gotchas
 
