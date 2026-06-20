@@ -1,0 +1,35 @@
+{
+  "run_id": "2026-06-20T03-48-32__claude-code__glm-5.2__astropy__astropy-7166",
+  "task_id": "astropy__astropy-7166",
+  "agent": "claude-code",
+  "agent_version": "2.1.153 (Claude Code)",
+  "model": "glm-5.2",
+  "mode": "local",
+  "status": "task_error",
+  "started_at": "2026-06-20T03:47:56Z",
+  "duration_sec": 0.0,
+  "harness_git_sha": "33a9864",
+  "task_source": {
+    "kind": "swe-bench",
+    "split": "test",
+    "original_id": "astropy__astropy-7166",
+    "swe_bench_commit": "c104f840cc67f8b6eec6f759ebc8b2693d585d4a"
+  },
+  "prompt": "InheritDocstrings metaclass doesn't work for properties\nInside the InheritDocstrings metaclass it uses `inspect.isfunction` which returns `False` for properties.\n",
+  "usage": {
+    "tokens_in": null,
+    "tokens_out": null,
+    "cache_read_tokens": null,
+    "cache_creation_tokens": null,
+    "cost_usd": null,
+    "billing_mode": "api"
+  },
+  "test_results": {
+    "pre_flight": {},
+    "post_flight": {}
+  },
+  "patch": "",
+  "workdir": "/var/folders/wd/n_p084lj52xb8hbrg6m9zfdm0000gn/T/cae-gv76owri",
+  "error": "setup_cmd failed (rc=1):     error: subprocess-exited-with-error\n    \n    \u00d7 python setup.py develop did not run successfully.\n    \u2502 exit code: 1\n    \u2570\u2500> [533 lines of output]\n        /Users/sarace/dev/probe/agent_eval/.venv/lib/python3.10/site-packages/setuptools/installer.py:27: SetuptoolsDeprecationWarning: setuptools.installer is deprecated. Requirements should be satisfied by a PEP 517 installer.\n          warnings.warn(\n        running develop\n        /Users/sarace/dev/probe/agent_eval/.venv/lib/python3.10/site-packages/setuptools/command/easy_install.py:156: EasyInstallDeprecationWarning: easy_install command is deprecated. Use build and pip and other standards-based tools.\n          warnings.warn(\n        /Users/sarace/dev/probe/agent_eval/.venv/lib/python3.10/site-packages/setuptools/command/install.py:34: SetuptoolsDeprecationWarning: setup.py install is deprecated. Use build and pip and other standards-based tools.\n          warnings.warn(\n        running egg_info\n        creating astropy.egg-info\n        writing astropy.egg-info/PKG-INFO\n        writing dependency_links to astropy.egg-info/dependency_links.txt\n        writing entry points to astropy.egg-info/entry_points.txt\n        writing requirements to astropy.egg-info/requires.txt\n        writing top-level names to astropy.egg-info/top_level.txt\n        writing manifest file 'astropy.egg-info/SOURCES.txt'\n        reading manifest template 'MANIFEST.in'\n        warning: no files found matching 'astropy/utils/misc/data/.hidden_file.txt'\n        warning: no files found matching '*' under directory 'scripts'\n        warning: no files found matching '*' under directory 'astropy/sphinx/themes'\n        no previously-included directories found matching 'docs/_build'\n        no previously-included directories found matching 'build'\n        warning: no files found matching '*.pyx' under directory 'astropy_helpers/astropy_helpers'\n        warning: no files found matching '*.h' under directory 'astropy_helpers/astropy_helpers'\n        no previously-included directories found matching 'astropy_helpers/build'\n        warning: no previously-included files matching '*.o' found anywhere in distribution\n        adding license file 'LICENSE.rst'\n        writing manifest file 'astropy.egg-info/SOURCES.txt'\n        running build_ext\n        running pre_hook from astropy._erfa.setup_package for build_ext command\n        running pre_hook from astropy.modeling.setup_package for build_ext command\n        /Users/sarace/.local/share/uv/python/cpython-3.10-macos-aarch64-none/lib/python3.10/importlib/__init__.py:169: UserWarning: The NumPy module was reloaded (imported a second time). This can in some cases result in small but subtle issues and is discouraged.\n          _bootstrap._exec(spec, module)\n        cythoning astropy/table/_np_utils.pyx to astropy/table/_np_utils.c\n        /Users/sarace/dev/probe/agent_eval/.venv/lib/python3.10/site-packages/Cython/Compiler/Main.py:369: FutureWarning: Cython directive 'language_level' not set, using 2 for now (Py2). This will change in a later release! File: /private/var/folders/wd/n_p084lj52xb8hbrg6m9zfdm0000gn/T/cae-gv76owri/astropy/table/_np_utils.pyx\n          tree = Parsing.p_module(s, pxd, full_module_name)\n        cythoning astropy/table/_column_mixins.pyx to astropy/table/_column_mixins.c\n        /Users/sarace/dev/probe/agent_eval/.venv/lib/python3.10/site-packages/Cython/Compiler/Main.py:369: FutureWarning: Cython directive 'language_level' not set, using 2 for now (Py2). This will change in a later release! File: /private/var/folders/wd/n_p084lj52xb8hbrg6m9zfdm0000gn/T/cae-gv76owri/astropy/table/_column_mixins.pyx\n          tree = Parsing.p_module(s, pxd, full_module_name)\n        cythoning astropy/io/ascii/cparser.pyx to astropy/io/ascii/cparser.c\n        /Users/sarace/dev/probe/agent_eval/.venv/lib/python3.10/site-packages/Cython/Compiler/Main.py:369: FutureWarning: Cython directive 'language_level' not set, using 2 for now (Py2). This will change in a later release! File: /private/var/folders/wd/n_p084lj52xb8hbrg6m9zfdm0000gn/T/cae-gv76owri/astropy/io/ascii/cparser.pyx\n          tree = Parsing.p_module(s, pxd, full_module_name)\n        cythoning astropy/cosmology/scalar_inv_efuncs.pyx to astropy/cosmology/scalar_inv_efuncs.c\n        /Users/sarace/dev/probe/agent_eval/.venv/lib/python3.10/site-packages/Cython/Compiler/Main.py:369: FutureWarning: Cython directive 'language_level' not set, using 2 for now (Py2). This will change in a later release! File: /private/var/folders/wd/n_p084lj52xb8hbrg6m9zfdm0000gn/T/cae-gv76owri/astropy/cosmology/scalar_inv_efuncs.pyx\n          tree = Parsing.p_module(s, pxd, full_module_name)\n        cythoning astropy/convolution/boundary_none.pyx to astropy/convolution/boundary_none.c\n        /Users/sarace/dev/probe/agent_eval/.venv/lib/python3.10/site-packages/Cython/Compiler/Main.py:369: FutureWarning: Cython directive 'language_level' not set, using 2 for now (Py2). This will change in a later release! File: /",
+  "would_run_command": null
+}

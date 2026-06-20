@@ -1,0 +1,54 @@
+{
+  "run_id": "2026-06-20T03-53-03__claude-code__glm-5.2__astropy__astropy-7166",
+  "task_id": "astropy__astropy-7166",
+  "agent": "claude-code",
+  "agent_version": "2.1.153 (Claude Code)",
+  "model": "glm-5.2",
+  "mode": "local",
+  "status": "dry_run",
+  "started_at": "2026-06-20T03:52:17Z",
+  "duration_sec": 0.0,
+  "harness_git_sha": "33a9864",
+  "task_source": {
+    "kind": "swe-bench",
+    "split": "test",
+    "original_id": "astropy__astropy-7166",
+    "swe_bench_commit": "c104f840cc67f8b6eec6f759ebc8b2693d585d4a"
+  },
+  "prompt": "InheritDocstrings metaclass doesn't work for properties\nInside the InheritDocstrings metaclass it uses `inspect.isfunction` which returns `False` for properties.\n",
+  "usage": {
+    "tokens_in": null,
+    "tokens_out": null,
+    "cache_read_tokens": null,
+    "cache_creation_tokens": null,
+    "cost_usd": null,
+    "billing_mode": "api"
+  },
+  "test_results": {
+    "pre_flight": {
+      "fail_to_pass": {
+        "astropy/utils/tests/test_misc.py::test_inherit_docstrings": "failed"
+      },
+      "pass_to_pass": {
+        "astropy/utils/tests/test_misc.py::test_isiterable": "passed",
+        "astropy/utils/tests/test_misc.py::test_signal_number_to_name_no_failure": "passed",
+        "astropy/utils/tests/test_misc.py::test_skip_hidden": "passed",
+        "astropy/utils/tests/test_misc.py::test_JsonCustomEncoder": "passed",
+        "astropy/utils/tests/test_misc.py::test_check_broadcast": "passed",
+        "astropy/utils/tests/test_misc.py::test_dtype_bytes_or_chars": "passed"
+      }
+    },
+    "post_flight": {}
+  },
+  "patch": "",
+  "workdir": "/var/folders/wd/n_p084lj52xb8hbrg6m9zfdm0000gn/T/cae-fpn2zklu",
+  "error": "",
+  "would_run_command": [
+    "claude",
+    "-p",
+    "InheritDocstrings metaclass doesn't work for properties\nInside the InheritDocstrings metaclass it uses `inspect.isfunction` which returns `False` for properties.\n",
+    "--output-format",
+    "json",
+    "--dangerously-skip-permissions"
+  ]
+}

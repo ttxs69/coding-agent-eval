@@ -19,15 +19,15 @@ footer { margin-top: 2em; color: #888; font-size: 12px; }
 <table id="lb">
 <thead><tr>
   <th>Agent</th><th>Model</th><th>Pass rate</th><th># tasks</th><th>Skipped</th>
-  <th>Median cost</th><th>Median time</th><th>Median tokens (in+out)</th>
+  <th>Median cost</th><th>Median time</th><th>Median tokens (in+out, % cached)</th>
   <th>Last run</th>
 </tr></thead>
 <tbody>
-<tr><td>claude-code</td><td>glm-5.1</td><td>75%</td><td>4</td><td>0</td><td>$0.59</td><td>186s</td><td>38287</td><td>2026-06-08T05:23:02Z</td></tr>
-<tr><td>codex</td><td>MiniMax-M3</td><td>25%</td><td>4</td><td>0</td><td>$?</td><td>325s</td><td>752198</td><td>2026-06-08T05:47:13Z</td></tr>
+<tr><td>claude-code</td><td>glm-5.2</td><td>67%</td><td>3</td><td>6</td><td>$0.85</td><td>249s</td><td>76875 (90% cached)</td><td>2026-06-20T09:36:16Z</td></tr>
+<tr><td>codex</td><td>MiniMax-M3</td><td>67%</td><td>3</td><td>2</td><td>$0.38</td><td>84s</td><td>332113 (47% cached)</td><td>2026-06-20T09:36:16Z</td></tr>
 </tbody>
 </table>
-<footer>Built 2026-06-08T06:21:26Z with harness <code>8fdca78</code> &middot; <a href="reproducibility.html">reproducibility</a></footer>
+<footer>Built 2026-06-20T10:28:24Z with harness <code>84ca34c</code> &middot; <a href="reproducibility.html">reproducibility</a></footer>
 <script>
 // minimal sort: click any th to sort the table by that column
 document.querySelectorAll('th').forEach((th, i) => {

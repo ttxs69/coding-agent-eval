@@ -2,15 +2,96 @@
 <html><head><meta charset="utf-8"><title>astropy__astropy-12907</title>
 <style>body{font:14px/1.4 system-ui,sans-serif;max-width:900px;margin:2em auto;padding:0 1em}
 pre{background:#f5f5f5;padding:1em;overflow-x:auto}
-@media(prefers-color-scheme:dark){body{background:#1a1a1a;color:#ddd}pre{background:#222}}
+table{border-collapse:collapse;margin:1em 0;width:100%;font-size:13px}
+th,td{padding:4px 8px;text-align:left;border-bottom:1px solid #ddd}
+th{background:#f5f5f5}
+code{background:#f0f0f0;padding:1px 4px;border-radius:3px;font-size:90%}
+@media(prefers-color-scheme:dark){
+  body{background:#1a1a1a;color:#ddd}
+  pre{background:#222}
+  th{background:#2a2a2a}
+  th,td{border-color:#333}
+  code{background:#2a2a2a;color:#ddd}
+}
 </style></head><body>
 <h1>astropy__astropy-12907</h1>
-<details>
-<summary><strong>claude-code</strong> — resolved</summary>
-<p>Model: <code>glm-5.1</code> &middot;
-   Duration: 166s &middot;
-   Cost: $0.54</p>
-<pre><code>diff --git a/astropy/modeling/separable.py b/astropy/modeling/separable.py
+<p><a href="../index.html">back to leaderboard</a></p>
+<h2>Prompt</h2><pre>Modeling&#x27;s `separability_matrix` does not compute separability correctly for nested CompoundModels
+Consider the following model:
+
+```python
+from astropy.modeling import models as m
+from astropy.modeling.separable import separability_matrix
+
+cm = m.Linear1D(10) &amp; m.Linear1D(5)
+```
+
+It&#x27;s separability matrix as you might expect is a diagonal:
+
+```python
+&gt;&gt;&gt; separability_matrix(cm)
+array([[ True, False],
+       [False,  True]])
+```
+
+If I make the model more complex:
+```python
+&gt;&gt;&gt; separability_matrix(m.Pix2Sky_TAN() &amp; m.Linear1D(10) &amp; m.Linear1D(5))
+array([[ True,  True, False, False],
+       [ True,  True, False, False],
+       [False, False,  True, False],
+       [False, False, False,  True]])
+```
+
+The output matrix is again, as expected, the outputs and inputs to the linear models are separable and independent of each other.
+
+If however, I nest these compound models:
+```python
+&gt;&gt;&gt; separability_matrix(m.Pix2Sky_TAN() &amp; cm)
+array([[ True,  True, False, False],
+       [ True,  True, False, False],
+       [False, False,  True,  True],
+       [False, False,  True,  True]])
+```
+Suddenly the inputs and outputs are no longer separable?
+
+This feels like a bug to me, but I might be missing something?
+</pre>
+<details open>
+<summary><strong>codex</strong> — resolved</summary>
+<p>Model: <code>MiniMax-M3</code> &middot;
+   Version: <code>codex-cli 0.141.0</code> &middot;
+   Duration: 72s &middot;
+   Cost: $0.38 &middot; 295,314 cache read</p>
+
+<h4>Test results</h4><table><thead><tr><th>Bucket</th><th>Test</th><th>Pre-flight</th><th>Post-flight</th></tr></thead><tbody><tr><td>Should now pass</td><td><code>astropy/modeling/tests/test_separable.py::test_separable[compound_model6-result6]</code></td><td>failed</td><td>passed</td></tr><tr><td>Should now pass</td><td><code>astropy/modeling/tests/test_separable.py::test_separable[compound_model9-result9]</code></td><td>failed</td><td>passed</td></tr><tr><td>Should still pass</td><td><code>astropy/modeling/tests/test_separable.py::test_coord_matrix</code></td><td>passed</td><td>passed</td></tr><tr><td>Should still pass</td><td><code>astropy/modeling/tests/test_separable.py::test_cdot</code></td><td>passed</td><td>passed</td></tr><tr><td>Should still pass</td><td><code>astropy/modeling/tests/test_separable.py::test_cstack</code></td><td>passed</td><td>passed</td></tr><tr><td>Should still pass</td><td><code>astropy/modeling/tests/test_separable.py::test_arith_oper</code></td><td>passed</td><td>passed</td></tr><tr><td>Should still pass</td><td><code>astropy/modeling/tests/test_separable.py::test_separable[compound_model0-result0]</code></td><td>passed</td><td>passed</td></tr><tr><td>Should still pass</td><td><code>astropy/modeling/tests/test_separable.py::test_separable[compound_model1-result1]</code></td><td>passed</td><td>passed</td></tr><tr><td>Should still pass</td><td><code>astropy/modeling/tests/test_separable.py::test_separable[compound_model2-result2]</code></td><td>passed</td><td>passed</td></tr><tr><td>Should still pass</td><td><code>astropy/modeling/tests/test_separable.py::test_separable[compound_model3-result3]</code></td><td>passed</td><td>passed</td></tr><tr><td>Should still pass</td><td><code>astropy/modeling/tests/test_separable.py::test_separable[compound_model4-result4]</code></td><td>passed</td><td>passed</td></tr><tr><td>Should still pass</td><td><code>astropy/modeling/tests/test_separable.py::test_separable[compound_model5-result5]</code></td><td>passed</td><td>passed</td></tr><tr><td>Should still pass</td><td><code>astropy/modeling/tests/test_separable.py::test_separable[compound_model7-result7]</code></td><td>passed</td><td>passed</td></tr><tr><td>Should still pass</td><td><code>astropy/modeling/tests/test_separable.py::test_separable[compound_model8-result8]</code></td><td>passed</td><td>passed</td></tr><tr><td>Should still pass</td><td><code>astropy/modeling/tests/test_separable.py::test_custom_model_separable</code></td><td>passed</td><td>passed</td></tr></tbody></table>
+<h4>Patch</h4><pre><code class="language-diff">diff --git a/CHANGES.rst b/CHANGES.rst
+index ac1e622..43171e7 100644
+--- a/CHANGES.rst
++++ b/CHANGES.rst
+@@ -7795,7 +7795,7 @@ astropy.table
+   e.g. ``t[&#x27;a&#x27;] = 0``.  To force an in-place update use the pattern
+   ``t[&#x27;a&#x27;][:] = [1, 2, 3]``. [#5556]
+ 
+-- Allow ``collections.Mapping``-like ``data`` attribute when initializing a
++- Allow ``collections.abc.Mapping``-like ``data`` attribute when initializing a
+   ``Table`` object (``dict``-like was already possible). [#5213]
+ 
+ astropy.tests
+diff --git a/astropy/cosmology/io/mapping.py b/astropy/cosmology/io/mapping.py
+index e1c172b..d8b44e2 100644
+--- a/astropy/cosmology/io/mapping.py
++++ b/astropy/cosmology/io/mapping.py
+@@ -126,7 +126,7 @@ def to_mapping(cosmology, *args, cls=dict, cosmology_as_str=False, move_from_met
+         Not used. Needed for compatibility with
+         `~astropy.io.registry.UnifiedReadWriteMethod`
+     cls : type (optional, keyword-only)
+-        `dict` or `collections.Mapping` subclass.
++        `dict` or `collections.abc.Mapping` subclass.
+         The mapping type to return. Default is `dict`.
+     cosmology_as_str : bool (optional, keyword-only)
+         Whether the cosmology value is the class (if `False`, default) or
+diff --git a/astropy/modeling/separable.py b/astropy/modeling/separable.py
 index a308e27..45bea36 100644
 --- a/astropy/modeling/separable.py
 +++ b/astropy/modeling/separable.py
@@ -61,24 +142,40 @@ index 8dfe5c8..024b239 100644
  
  
 </code></pre>
-</details><details>
-<summary><strong>codex</strong> — resolved</summary>
-<p>Model: <code>MiniMax-M3</code> &middot;
-   Duration: 245s &middot;
-   Cost: $?</p>
-<pre><code>diff --git a/astropy/modeling/separable.py b/astropy/modeling/separable.py
-index a308e27..45bea36 100644
---- a/astropy/modeling/separable.py
-+++ b/astropy/modeling/separable.py
-@@ -242,7 +242,7 @@ def _cstack(left, right):
-         cright = _coord_matrix(right, &#x27;right&#x27;, noutp)
-     else:
-         cright = np.zeros((noutp, right.shape[1]))
--        cright[-right.shape[0]:, -right.shape[1]:] = 1
-+        cright[-right.shape[0]:, -right.shape[1]:] = right
+</details><details open>
+<summary><strong>claude-code</strong> — failed</summary>
+<p>Model: <code>glm-5.2</code> &middot;
+   Version: <code>2.1.153 (Claude Code)</code> &middot;
+   Duration: 101s &middot;
+   Cost: $0.51 &middot; 166,528 cache read</p>
+
+<h4>Test results</h4><table><thead><tr><th>Bucket</th><th>Test</th><th>Pre-flight</th><th>Post-flight</th></tr></thead><tbody><tr><td>Should now pass</td><td><code>astropy/modeling/tests/test_separable.py::test_separable[compound_model6-result6]</code></td><td>failed</td><td>failed</td></tr><tr><td>Should now pass</td><td><code>astropy/modeling/tests/test_separable.py::test_separable[compound_model9-result9]</code></td><td>failed</td><td>failed</td></tr><tr><td>Should still pass</td><td><code>astropy/modeling/tests/test_separable.py::test_coord_matrix</code></td><td>passed</td><td>passed</td></tr><tr><td>Should still pass</td><td><code>astropy/modeling/tests/test_separable.py::test_cdot</code></td><td>passed</td><td>passed</td></tr><tr><td>Should still pass</td><td><code>astropy/modeling/tests/test_separable.py::test_cstack</code></td><td>passed</td><td>passed</td></tr><tr><td>Should still pass</td><td><code>astropy/modeling/tests/test_separable.py::test_arith_oper</code></td><td>passed</td><td>passed</td></tr><tr><td>Should still pass</td><td><code>astropy/modeling/tests/test_separable.py::test_separable[compound_model0-result0]</code></td><td>passed</td><td>passed</td></tr><tr><td>Should still pass</td><td><code>astropy/modeling/tests/test_separable.py::test_separable[compound_model1-result1]</code></td><td>passed</td><td>passed</td></tr><tr><td>Should still pass</td><td><code>astropy/modeling/tests/test_separable.py::test_separable[compound_model2-result2]</code></td><td>passed</td><td>passed</td></tr><tr><td>Should still pass</td><td><code>astropy/modeling/tests/test_separable.py::test_separable[compound_model3-result3]</code></td><td>passed</td><td>passed</td></tr><tr><td>Should still pass</td><td><code>astropy/modeling/tests/test_separable.py::test_separable[compound_model4-result4]</code></td><td>passed</td><td>passed</td></tr><tr><td>Should still pass</td><td><code>astropy/modeling/tests/test_separable.py::test_separable[compound_model5-result5]</code></td><td>passed</td><td>passed</td></tr><tr><td>Should still pass</td><td><code>astropy/modeling/tests/test_separable.py::test_separable[compound_model7-result7]</code></td><td>passed</td><td>passed</td></tr><tr><td>Should still pass</td><td><code>astropy/modeling/tests/test_separable.py::test_separable[compound_model8-result8]</code></td><td>passed</td><td>passed</td></tr><tr><td>Should still pass</td><td><code>astropy/modeling/tests/test_separable.py::test_custom_model_separable</code></td><td>passed</td><td>passed</td></tr></tbody></table>
+<h4>Patch</h4><pre><code class="language-diff">diff --git a/CHANGES.rst b/CHANGES.rst
+index ac1e622..43171e7 100644
+--- a/CHANGES.rst
++++ b/CHANGES.rst
+@@ -7795,7 +7795,7 @@ astropy.table
+   e.g. ``t[&#x27;a&#x27;] = 0``.  To force an in-place update use the pattern
+   ``t[&#x27;a&#x27;][:] = [1, 2, 3]``. [#5556]
  
-     return np.hstack([cleft, cright])
+-- Allow ``collections.Mapping``-like ``data`` attribute when initializing a
++- Allow ``collections.abc.Mapping``-like ``data`` attribute when initializing a
+   ``Table`` object (``dict``-like was already possible). [#5213]
  
+ astropy.tests
+diff --git a/astropy/cosmology/io/mapping.py b/astropy/cosmology/io/mapping.py
+index e1c172b..d8b44e2 100644
+--- a/astropy/cosmology/io/mapping.py
++++ b/astropy/cosmology/io/mapping.py
+@@ -126,7 +126,7 @@ def to_mapping(cosmology, *args, cls=dict, cosmology_as_str=False, move_from_met
+         Not used. Needed for compatibility with
+         `~astropy.io.registry.UnifiedReadWriteMethod`
+     cls : type (optional, keyword-only)
+-        `dict` or `collections.Mapping` subclass.
++        `dict` or `collections.abc.Mapping` subclass.
+         The mapping type to return. Default is `dict`.
+     cosmology_as_str : bool (optional, keyword-only)
+         Whether the cosmology value is the class (if `False`, default) or
 diff --git a/astropy/modeling/tests/test_separable.py b/astropy/modeling/tests/test_separable.py
 index 8dfe5c8..024b239 100644
 --- a/astropy/modeling/tests/test_separable.py
@@ -118,5 +215,4 @@ index 8dfe5c8..024b239 100644
  
 </code></pre>
 </details>
-<p><a href="../index.html">back to leaderboard</a></p>
 </body></html>

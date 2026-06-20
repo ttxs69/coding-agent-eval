@@ -1,0 +1,87 @@
+{
+  "run_id": "2026-06-20T09-38-54__codex__MiniMax-M3__astropy__astropy-13033",
+  "task_id": "astropy__astropy-13033",
+  "agent": "codex",
+  "agent_version": "codex-cli 0.141.0",
+  "model": "MiniMax-M3",
+  "mode": "local",
+  "status": "failed",
+  "started_at": "2026-06-20T09:36:16Z",
+  "duration_sec": 97.85480004211422,
+  "harness_git_sha": "79d47ce",
+  "task_source": {
+    "kind": "swe-bench",
+    "split": "test",
+    "original_id": "astropy__astropy-13033",
+    "swe_bench_commit": "c104f840cc67f8b6eec6f759ebc8b2693d585d4a"
+  },
+  "prompt": "TimeSeries: misleading exception when required column check fails.\n<!-- This comments are hidden when you submit the issue,\r\nso you do not need to remove them! -->\r\n\r\n<!-- Please be sure to check out our contributing guidelines,\r\nhttps://github.com/astropy/astropy/blob/main/CONTRIBUTING.md .\r\nPlease be sure to check out our code of conduct,\r\nhttps://github.com/astropy/astropy/blob/main/CODE_OF_CONDUCT.md . -->\r\n\r\n<!-- Please have a search on our GitHub repository to see if a similar\r\nissue has already been posted.\r\nIf a similar issue is closed, have a quick look to see if you are satisfied\r\nby the resolution.\r\nIf not please go ahead and open an issue! -->\r\n\r\n<!-- Please check that the development version still produces the same bug.\r\nYou can install development version with\r\npip install git+https://github.com/astropy/astropy\r\ncommand. -->\r\n\r\n### Description\r\n<!-- Provide a general description of the bug. -->\r\n\r\nFor a `TimeSeries` object that has additional required columns (in addition to `time`), when codes mistakenly try to remove a required column, the exception it produces is misleading.\r\n\r\n### Expected behavior\r\n<!-- What did you expect to happen. -->\r\nAn exception that informs the users required columns are missing.\r\n\r\n### Actual behavior\r\nThe actual exception message is confusing:\r\n`ValueError: TimeSeries object is invalid - expected 'time' as the first columns but found 'time'`\r\n\r\n### Steps to Reproduce\r\n<!-- Ideally a code example could be provided so we can run it ourselves. -->\r\n<!-- If you are pasting code, use triple backticks (```) around\r\nyour code snippet. -->\r\n<!-- If necessary, sanitize your screen output to be pasted so you do not\r\nreveal secrets like tokens and passwords. -->\r\n\r\n```python\r\nfrom astropy.time import Time\r\nfrom astropy.timeseries import TimeSeries\r\n\r\ntime=Time(np.arange(100000, 100003), format='jd')\r\nts = TimeSeries(time=time, data = {\"flux\": [99.9, 99.8, 99.7]})\r\nts._required_columns = [\"time\", \"flux\"]                                   \r\nts.remove_column(\"flux\")\r\n\r\n```\r\n\r\n### System Details\r\n<!-- Even if you do not think this is necessary, it is useful information for the maintainers.\r\nPlease run the following snippet and paste the output below:\r\nimport platform; print(platform.platform())\r\nimport sys; print(\"Python\", sys.version)\r\nimport numpy; print(\"Numpy\", numpy.__version__)\r\nimport erfa; print(\"pyerfa\", erfa.__version__)\r\nimport astropy; print(\"astropy\", astropy.__version__)\r\nimport scipy; print(\"Scipy\", scipy.__version__)\r\nimport matplotlib; print(\"Matplotlib\", matplotlib.__version__)\r\n-->\r\n```\r\nWindows-10-10.0.22000-SP0\r\nPython 3.9.10 | packaged by conda-forge | (main, Feb  1 2022, 21:21:54) [MSC v.1929 64 bit (AMD64)]\r\nNumpy 1.22.3\r\npyerfa 2.0.0.1\r\nastropy 5.0.3\r\nScipy 1.8.0\r\nMatplotlib 3.5.1\r\n```\n",
+  "usage": {
+    "tokens_in": 239472,
+    "tokens_out": 5141,
+    "cache_read_tokens": 209792,
+    "cache_creation_tokens": null,
+    "cost_usd": 0.2818968,
+    "billing_mode": "api"
+  },
+  "test_results": {
+    "pre_flight": {
+      "fail_to_pass": {
+        "astropy/timeseries/tests/test_sampled.py::test_required_columns": "failed"
+      },
+      "pass_to_pass": {
+        "astropy/timeseries/tests/test_sampled.py::test_empty_initialization": "passed",
+        "astropy/timeseries/tests/test_sampled.py::test_empty_initialization_invalid": "passed",
+        "astropy/timeseries/tests/test_sampled.py::test_initialize_only_time": "passed",
+        "astropy/timeseries/tests/test_sampled.py::test_initialization_with_data": "passed",
+        "astropy/timeseries/tests/test_sampled.py::test_initialize_only_data": "passed",
+        "astropy/timeseries/tests/test_sampled.py::test_initialization_with_table": "passed",
+        "astropy/timeseries/tests/test_sampled.py::test_initialization_missing_time_delta": "passed",
+        "astropy/timeseries/tests/test_sampled.py::test_initialization_invalid_time_and_time_start": "passed",
+        "astropy/timeseries/tests/test_sampled.py::test_initialization_invalid_time_delta": "passed",
+        "astropy/timeseries/tests/test_sampled.py::test_initialization_with_time_in_data": "passed",
+        "astropy/timeseries/tests/test_sampled.py::test_initialization_n_samples": "passed",
+        "astropy/timeseries/tests/test_sampled.py::test_initialization_length_mismatch": "passed",
+        "astropy/timeseries/tests/test_sampled.py::test_initialization_invalid_both_time_and_time_delta": "passed",
+        "astropy/timeseries/tests/test_sampled.py::test_fold": "passed",
+        "astropy/timeseries/tests/test_sampled.py::test_fold_invalid_options": "passed",
+        "astropy/timeseries/tests/test_sampled.py::test_read_time_missing": "passed",
+        "astropy/timeseries/tests/test_sampled.py::test_read_time_wrong": "passed",
+        "astropy/timeseries/tests/test_sampled.py::test_read": "passed",
+        "astropy/timeseries/tests/test_sampled.py::test_periodogram[BoxLeastSquares]": "passed",
+        "astropy/timeseries/tests/test_sampled.py::test_periodogram[LombScargle]": "passed"
+      }
+    },
+    "post_flight": {
+      "fail_to_pass": {
+        "astropy/timeseries/tests/test_sampled.py::test_required_columns": "failed"
+      },
+      "pass_to_pass": {
+        "astropy/timeseries/tests/test_sampled.py::test_empty_initialization": "passed",
+        "astropy/timeseries/tests/test_sampled.py::test_empty_initialization_invalid": "passed",
+        "astropy/timeseries/tests/test_sampled.py::test_initialize_only_time": "passed",
+        "astropy/timeseries/tests/test_sampled.py::test_initialization_with_data": "passed",
+        "astropy/timeseries/tests/test_sampled.py::test_initialize_only_data": "passed",
+        "astropy/timeseries/tests/test_sampled.py::test_initialization_with_table": "passed",
+        "astropy/timeseries/tests/test_sampled.py::test_initialization_missing_time_delta": "passed",
+        "astropy/timeseries/tests/test_sampled.py::test_initialization_invalid_time_and_time_start": "passed",
+        "astropy/timeseries/tests/test_sampled.py::test_initialization_invalid_time_delta": "passed",
+        "astropy/timeseries/tests/test_sampled.py::test_initialization_with_time_in_data": "passed",
+        "astropy/timeseries/tests/test_sampled.py::test_initialization_n_samples": "passed",
+        "astropy/timeseries/tests/test_sampled.py::test_initialization_length_mismatch": "passed",
+        "astropy/timeseries/tests/test_sampled.py::test_initialization_invalid_both_time_and_time_delta": "passed",
+        "astropy/timeseries/tests/test_sampled.py::test_fold": "passed",
+        "astropy/timeseries/tests/test_sampled.py::test_fold_invalid_options": "passed",
+        "astropy/timeseries/tests/test_sampled.py::test_read_time_missing": "passed",
+        "astropy/timeseries/tests/test_sampled.py::test_read_time_wrong": "passed",
+        "astropy/timeseries/tests/test_sampled.py::test_read": "passed",
+        "astropy/timeseries/tests/test_sampled.py::test_periodogram[BoxLeastSquares]": "passed",
+        "astropy/timeseries/tests/test_sampled.py::test_periodogram[LombScargle]": "passed"
+      }
+    }
+  },
+  "patch": "diff --git a/CHANGES.rst b/CHANGES.rst\nindex 780e004..89301fe 100644\n--- a/CHANGES.rst\n+++ b/CHANGES.rst\n@@ -7916,7 +7916,7 @@ astropy.table\n   e.g. ``t['a'] = 0``.  To force an in-place update use the pattern\n   ``t['a'][:] = [1, 2, 3]``. [#5556]\n \n-- Allow ``collections.Mapping``-like ``data`` attribute when initializing a\n+- Allow ``collections.abc.Mapping``-like ``data`` attribute when initializing a\n   ``Table`` object (``dict``-like was already possible). [#5213]\n \n astropy.tests\ndiff --git a/astropy/cosmology/io/mapping.py b/astropy/cosmology/io/mapping.py\nindex c2d5a17..76d9e1f 100644\n--- a/astropy/cosmology/io/mapping.py\n+++ b/astropy/cosmology/io/mapping.py\n@@ -124,7 +124,7 @@ def to_mapping(cosmology, *args, cls=dict, cosmology_as_str=False, move_from_met\n         Not used. Needed for compatibility with\n         `~astropy.io.registry.UnifiedReadWriteMethod`\n     cls : type (optional, keyword-only)\n-        `dict` or `collections.Mapping` subclass.\n+        `dict` or `collections.abc.Mapping` subclass.\n         The mapping type to return. Default is `dict`.\n     cosmology_as_str : bool (optional, keyword-only)\n         Whether the cosmology value is the class (if `False`, default) or\ndiff --git a/astropy/timeseries/core.py b/astropy/timeseries/core.py\nindex c279f35..a81e16c 100644\n--- a/astropy/timeseries/core.py\n+++ b/astropy/timeseries/core.py\n@@ -66,6 +66,19 @@ class BaseTimeSeries(QTable):\n             else:\n                 required_columns = self._required_columns\n \n+            # Detect missing required columns up front so that the error\n+            # message clearly tells the user which columns are absent\n+            # rather than reporting only the first-column mismatch.\n+            if not self._required_columns_relax:\n+                missing_columns = [c for c in required_columns\n+                                   if c not in self.colnames]\n+                if missing_columns:\n+                    plural = 's' if len(missing_columns) > 1 else ''\n+                    missing = ', '.join(repr(c) for c in missing_columns)\n+                    raise ValueError(\n+                        \"{} object is invalid - missing required column{}: {}\"\n+                        .format(self.__class__.__name__, plural, missing))\n+\n             plural = 's' if len(required_columns) > 1 else ''\n \n             if not self._required_columns_relax and len(self.colnames) == 0:\ndiff --git a/astropy/timeseries/tests/test_sampled.py b/astropy/timeseries/tests/test_sampled.py\nindex bcc06d9..241d711 100644\n--- a/astropy/timeseries/tests/test_sampled.py\n+++ b/astropy/timeseries/tests/test_sampled.py\n@@ -395,6 +395,14 @@ def test_required_columns():\n     assert exc.value.args[0] == (\"TimeSeries object is invalid - expected \"\n                                  \"'time' as the first column but found 'banana'\")\n \n+    # https://github.com/astropy/astropy/issues/13009\n+    ts_2cols_required = ts.copy()\n+    ts_2cols_required._required_columns = ['time', 'a']\n+    with pytest.raises(ValueError) as exc:\n+        ts_2cols_required.remove_column('a')\n+    assert exc.value.args[0] == (\"TimeSeries object is invalid - expected \"\n+                                 \"['time', 'a'] as the first columns but found ['time', 'b']\")\n+\n \n @pytest.mark.parametrize('cls', [BoxLeastSquares, LombScargle])\n def test_periodogram(cls):\n",
+  "workdir": "/var/folders/wd/n_p084lj52xb8hbrg6m9zfdm0000gn/T/cae-cbbsjcf1",
+  "error": "",
+  "would_run_command": null
+}

@@ -2,21 +2,401 @@
 <html><head><meta charset="utf-8"><title>astropy__astropy-7671</title>
 <style>body{font:14px/1.4 system-ui,sans-serif;max-width:900px;margin:2em auto;padding:0 1em}
 pre{background:#f5f5f5;padding:1em;overflow-x:auto}
-@media(prefers-color-scheme:dark){body{background:#1a1a1a;color:#ddd}pre{background:#222}}
+table{border-collapse:collapse;margin:1em 0;width:100%;font-size:13px}
+th,td{padding:4px 8px;text-align:left;border-bottom:1px solid #ddd}
+th{background:#f5f5f5}
+code{background:#f0f0f0;padding:1px 4px;border-radius:3px;font-size:90%}
+@media(prefers-color-scheme:dark){
+  body{background:#1a1a1a;color:#ddd}
+  pre{background:#222}
+  th{background:#2a2a2a}
+  th,td{border-color:#333}
+  code{background:#2a2a2a;color:#ddd}
+}
 </style></head><body>
 <h1>astropy__astropy-7671</h1>
-<details>
-<summary><strong>claude-code</strong> — task_error</summary>
-<p>Model: <code></code> &middot;
-   Duration: 0s &middot;
-   Cost: $?</p>
-<pre><code></code></pre>
-</details><details>
-<summary><strong>codex</strong> — task_error</summary>
-<p>Model: <code></code> &middot;
-   Duration: 0s &middot;
-   Cost: $?</p>
-<pre><code></code></pre>
-</details>
 <p><a href="../index.html">back to leaderboard</a></p>
+<h2>Prompt</h2><pre>minversion failures
+The change in PR #7647 causes `minversion` to fail in certain cases, e.g.:
+```
+&gt;&gt;&gt; from astropy.utils import minversion
+&gt;&gt;&gt; minversion(&#x27;numpy&#x27;, &#x27;1.14dev&#x27;)
+TypeError                                 Traceback (most recent call last)
+&lt;ipython-input-1-760e6b1c375e&gt; in &lt;module&gt;()
+      1 from astropy.utils import minversion
+----&gt; 2 minversion(&#x27;numpy&#x27;, &#x27;1.14dev&#x27;)
+
+~/dev/astropy/astropy/utils/introspection.py in minversion(module, version, inclusive, version_path)
+    144
+    145     if inclusive:
+--&gt; 146         return LooseVersion(have_version) &gt;= LooseVersion(version)
+    147     else:
+    148         return LooseVersion(have_version) &gt; LooseVersion(version)
+
+~/local/conda/envs/photutils-dev/lib/python3.6/distutils/version.py in __ge__(self, other)
+     68
+     69     def __ge__(self, other):
+---&gt; 70         c = self._cmp(other)
+     71         if c is NotImplemented:
+     72             return c
+
+~/local/conda/envs/photutils-dev/lib/python3.6/distutils/version.py in _cmp(self, other)
+    335         if self.version == other.version:
+    336             return 0
+--&gt; 337         if self.version &lt; other.version:
+    338             return -1
+    339         if self.version &gt; other.version:
+
+TypeError: &#x27;&lt;&#x27; not supported between instances of &#x27;int&#x27; and &#x27;str&#x27;
+```
+apparently because of a bug in LooseVersion (https://bugs.python.org/issue30272):
+
+```
+&gt;&gt;&gt; from distutils.version import LooseVersion
+&gt;&gt;&gt; LooseVersion(&#x27;1.14.3&#x27;)  &gt;= LooseVersion(&#x27;1.14dev&#x27;)
+...
+TypeError: &#x27;&lt;&#x27; not supported between instances of &#x27;int&#x27; and &#x27;str&#x27;
+```
+
+Note that without the &quot;.3&quot; it doesn&#x27;t fail:
+
+```
+&gt;&gt;&gt; LooseVersion(&#x27;1.14&#x27;)  &gt;= LooseVersion(&#x27;1.14dev&#x27;)
+False
+```
+
+and using pkg_resources.parse_version (which was removed) works:
+```
+&gt;&gt;&gt; from pkg_resources import parse_version
+&gt;&gt;&gt; parse_version(&#x27;1.14.3&#x27;) &gt;= parse_version(&#x27;1.14dev&#x27;)
+True
+```
+
+CC: @mhvk 
+</pre>
+<details open>
+<summary><strong>claude-code</strong> — task_error</summary>
+<p>Model: <code>glm-5.2</code> &middot;
+   Version: <code>2.1.153 (Claude Code)</code> &middot;
+   Duration: 0s &middot;
+   Cost: $?</p>
+<p><strong>Error:</strong> <code>setup_cmd failed (rc=1):     error: subprocess-exited-with-error
+    
+    × python setup.py develop did not run successfully.
+    │ exit code: 1
+    ╰─&gt; [714 lines of output]
+        /Users/sarace/dev/probe/agent_eval/.venv/lib/python3.10/site-packages/setuptools/installer.py:27: SetuptoolsDeprecationWarning: setuptools.installer is deprecated. Requirements should be satisfied by a PEP 517 installer.
+          warnings.warn(
+        running develop
+        /Users/sarace/dev/probe/agent_eval/.ven<a href="#" onclick="this.parentNode.querySelector('details').open=true;return false">…</a></code></p><details><summary>Full error</summary><pre><code>setup_cmd failed (rc=1):     error: subprocess-exited-with-error
+    
+    × python setup.py develop did not run successfully.
+    │ exit code: 1
+    ╰─&gt; [714 lines of output]
+        /Users/sarace/dev/probe/agent_eval/.venv/lib/python3.10/site-packages/setuptools/installer.py:27: SetuptoolsDeprecationWarning: setuptools.installer is deprecated. Requirements should be satisfied by a PEP 517 installer.
+          warnings.warn(
+        running develop
+        /Users/sarace/dev/probe/agent_eval/.venv/lib/python3.10/site-packages/setuptools/command/easy_install.py:156: EasyInstallDeprecationWarning: easy_install command is deprecated. Use build and pip and other standards-based tools.
+          warnings.warn(
+        /Users/sarace/dev/probe/agent_eval/.venv/lib/python3.10/site-packages/setuptools/command/install.py:34: SetuptoolsDeprecationWarning: setup.py install is deprecated. Use build and pip and other standards-based tools.
+          warnings.warn(
+        running egg_info
+        creating astropy.egg-info
+        writing astropy.egg-info/PKG-INFO
+        writing dependency_links to astropy.egg-info/dependency_links.txt
+        writing entry points to astropy.egg-info/entry_points.txt
+        writing requirements to astropy.egg-info/requires.txt
+        writing top-level names to astropy.egg-info/top_level.txt
+        writing manifest file &#x27;astropy.egg-info/SOURCES.txt&#x27;
+        reading manifest template &#x27;MANIFEST.in&#x27;
+        warning: no files found matching &#x27;ez_setup.py&#x27;
+        warning: no files found matching &#x27;astropy/utils/misc/data/.hidden_file.txt&#x27;
+        warning: no files found matching &#x27;*&#x27; under directory &#x27;scripts&#x27;
+        warning: no files found matching &#x27;*&#x27; under directory &#x27;astropy/sphinx/themes&#x27;
+        no previously-included directories found matching &#x27;docs/_build&#x27;
+        no previously-included directories found matching &#x27;build&#x27;
+        warning: no files found matching &#x27;astropy_helpers/ez_setup.py&#x27;
+        warning: no files found matching &#x27;*.pyx&#x27; under directory &#x27;astropy_helpers/astropy_helpers&#x27;
+        warning: no files found matching &#x27;*.h&#x27; under directory &#x27;astropy_helpers/astropy_helpers&#x27;
+        no previously-included directories found matching &#x27;astropy_helpers/build&#x27;
+        warning: no previously-included files matching &#x27;*.o&#x27; found anywhere in distribution
+        adding license file &#x27;LICENSE.rst&#x27;
+        writing manifest file &#x27;astropy.egg-info/SOURCES.txt&#x27;
+        running build_ext
+        running pre_hook from astropy._erfa.setup_package for build_ext command
+        running pre_hook from astropy.modeling.setup_package for build_ext command
+        /Users/sarace/.local/share/uv/python/cpython-3.10-macos-aarch64-none/lib/python3.10/importlib/__init__.py:169: UserWarning: The NumPy module was reloaded (imported a second time). This can in some cases result in small but subtle issues and is discouraged.
+          _bootstrap._exec(spec, module)
+        cythoning astropy/table/_np_utils.pyx to astropy/table/_np_utils.c
+        /Users/sarace/dev/probe/agent_eval/.venv/lib/python3.10/site-packages/Cython/Compiler/Main.py:369: FutureWarning: Cython directive &#x27;language_level&#x27; not set, using 2 for now (Py2). This will change in a later release! File: /private/var/folders/wd/n_p084lj52xb8hbrg6m9zfdm0000gn/T/cae-lcke24gt/astropy/table/_np_utils.pyx
+          tree = Parsing.p_module(s, pxd, full_module_name)
+        cythoning astropy/table/_column_mixins.pyx to astropy/table/_column_mixins.c
+        /Users/sarace/dev/probe/agent_eval/.venv/lib/python3.10/site-packages/Cython/Compiler/Main.py:369: FutureWarning: Cython directive &#x27;language_level&#x27; not set, using 2 for now (Py2). This will change in a later release! File: /private/var/folders/wd/n_p084lj52xb8hbrg6m9zfdm0000gn/T/cae-lcke24gt/astropy/table/_column_mixins.pyx
+          tree = Parsing.p_module(s, pxd, full_module_name)
+        cythoning astropy/io/ascii/cparser.pyx to astropy/io/ascii/cparser.c
+        /Users/sarace/dev/probe/agent_eval/.venv/lib/python3.10/site-packages/Cython/Compiler/Main.py:369: FutureWarning: Cython directive &#x27;language_level&#x27; not set, using 2 for now (Py2). This will change in a later release! File: /private/var/folders/wd/n_p084lj52xb8hbrg6m9zfdm0000gn/T/cae-lcke24gt/astropy/io/ascii/cparser.pyx
+          tree = Parsing.p_module(s, pxd, full_module_name)
+        cythoning astropy/cosmology/scalar_inv_efuncs.pyx to astropy/cosmology/scalar_inv_efuncs.c
+        /Users/sarace/dev/probe/agent_eval/.venv/lib/python3.10/site-packages/Cython/Compiler/Main.py:369: FutureWarning: Cython directive &#x27;language_level&#x27; not set, using 2 for now (Py2). This will change in a later release! File: /private/var/folders/wd/n_p084lj52xb8hbrg6m9zfdm0000gn/T/cae-lcke24gt/astropy/cosmology/scalar_inv_efuncs.pyx
+          tree = Parsing.p_module(s, pxd, full_module_name)
+        cythoning astropy/convolution/boundary_none.pyx to astropy/convolution/boundary_none.c
+        /Users/sarace/dev/probe/agent_eval/.venv/lib/python3.10/site-packages/Cython/Compiler/Main.py:369:</code></pre></details>
+
+
+</details><details open>
+<summary><strong>codex</strong> — resolved</summary>
+<p>Model: <code>MiniMax-M3</code> &middot;
+   Version: <code>codex-cli 0.141.0</code> &middot;
+   Duration: 84s &middot;
+   Cost: $0.72 &middot; 575,222 cache read</p>
+
+<h4>Test results</h4><table><thead><tr><th>Bucket</th><th>Test</th><th>Pre-flight</th><th>Post-flight</th></tr></thead><tbody><tr><td>Should now pass</td><td><code>astropy/utils/tests/test_introspection.py::test_minversion</code></td><td>failed</td><td>passed</td></tr><tr><td>Should still pass</td><td><code>astropy/utils/tests/test_introspection.py::test_pkg_finder</code></td><td>passed</td><td>passed</td></tr><tr><td>Should still pass</td><td><code>astropy/utils/tests/test_introspection.py::test_find_current_mod</code></td><td>passed</td><td>passed</td></tr><tr><td>Should still pass</td><td><code>astropy/utils/tests/test_introspection.py::test_find_mod_objs</code></td><td>passed</td><td>passed</td></tr></tbody></table>
+<h4>Patch</h4><pre><code class="language-diff">diff --git a/CHANGES.rst b/CHANGES.rst
+index 2c2da77..3a6a6e1 100644
+--- a/CHANGES.rst
++++ b/CHANGES.rst
+@@ -154,6 +154,11 @@ astropy.units
+ astropy.utils
+ ^^^^^^^^^^^^^
+ 
++- Fixed ``astropy.utils.minversion`` raising a ``TypeError`` when comparing
++  a version with a ``dev`` suffix (e.g. ``&#x27;1.14dev&#x27;``) against a more
++  specific version such as ``&#x27;1.14.3&#x27;``.  The function now uses
++  ``pkg_resources.parse_version`` to perform the comparison. [#7647]
++
+ astropy.visualization
+ ^^^^^^^^^^^^^^^^^^^^^
+ 
+@@ -2782,7 +2787,7 @@ astropy.table
+   e.g. ``t[&#x27;a&#x27;] = 0``.  To force an in-place update use the pattern
+   ``t[&#x27;a&#x27;][:] = [1, 2, 3]``. [#5556]
+ 
+-- Allow ``collections.Mapping``-like ``data`` attribute when initializing a
++- Allow ``collections.abc.Mapping``-like ``data`` attribute when initializing a
+   ``Table`` object (``dict``-like was already possible). [#5213]
+ 
+ astropy.tests
+diff --git a/astropy/coordinates/sky_coordinate.py b/astropy/coordinates/sky_coordinate.py
+index 5195653..3499c10 100644
+--- a/astropy/coordinates/sky_coordinate.py
++++ b/astropy/coordinates/sky_coordinate.py
+@@ -1798,7 +1798,7 @@ def _get_frame(args, kwargs):
+         # to allow the first argument to set the class.  That&#x27;s OK because
+         # _parse_coordinate_arg goes and checks that the frames match between
+         # the first and all the others
+-        if (isinstance(arg, (collections.Sequence, np.ndarray)) and
++        if (isinstance(arg, (collections.abc.Sequence, np.ndarray)) and
+              len(args) == 1 and len(arg) &gt; 0):
+             arg = arg[0]
+ 
+@@ -1968,7 +1968,7 @@ def _parse_coordinate_arg(coords, frame, units, init_kwargs):
+         # 2-d array of coordinate values.  Handle specially for efficiency.
+         values = coords.transpose()  # Iterates over repr attrs
+ 
+-    elif isinstance(coords, (collections.Sequence, np.ndarray)):
++    elif isinstance(coords, (collections.abc.Sequence, np.ndarray)):
+         # Handles list-like input.
+ 
+         vals = []
+diff --git a/astropy/extern/configobj/configobj.py b/astropy/extern/configobj/configobj.py
+index 3e646ea..06598d7 100755
+--- a/astropy/extern/configobj/configobj.py
++++ b/astropy/extern/configobj/configobj.py
+@@ -594,7 +594,7 @@ class Section(dict):
+             if key not in self:
+                 self.sections.append(key)
+             dict.__setitem__(self, key, value)
+-        elif isinstance(value, collections.Mapping) and not unrepr:
++        elif isinstance(value, collections.abc.Mapping) and not unrepr:
+             # First create the new depth level,
+             # then create the section
+             if key not in self:
+@@ -801,8 +801,8 @@ class Section(dict):
+         ConfigObj({&#x27;section1&#x27;: {&#x27;option1&#x27;: &#x27;False&#x27;, &#x27;subsection&#x27;: {&#x27;more_options&#x27;: &#x27;False&#x27;}}})
+         &quot;&quot;&quot;
+         for key, val in list(indict.items()):
+-            if (key in self and isinstance(self[key], collections.Mapping) and
+-                                isinstance(val, collections.Mapping)):
++            if (key in self and isinstance(self[key], collections.abc.Mapping) and
++                                isinstance(val, collections.abc.Mapping)):
+                 self[key].merge(val)
+             else:
+                 self[key] = val
+@@ -2434,7 +2434,7 @@ def flatten_errors(cfg, res, levels=None, results=None):
+     for (key, val) in list(res.items()):
+         if val == True:
+             continue
+-        if isinstance(cfg.get(key), collections.Mapping):
++        if isinstance(cfg.get(key), collections.abc.Mapping):
+             # Go down one level
+             levels.append(key)
+             flatten_errors(cfg[key], val, levels, results)
+diff --git a/astropy/io/fits/header.py b/astropy/io/fits/header.py
+index aa65c5c..8f0b4e6 100644
+--- a/astropy/io/fits/header.py
++++ b/astropy/io/fits/header.py
+@@ -1904,8 +1904,8 @@ class Header:
+             self[key] = value
+ 
+ 
+-collections.MutableSequence.register(Header)
+-collections.MutableMapping.register(Header)
++collections.abc.MutableSequence.register(Header)
++collections.abc.MutableMapping.register(Header)
+ 
+ 
+ class _CardAccessor:
+@@ -1976,8 +1976,8 @@ class _CardAccessor:
+         return False
+ 
+ 
+-collections.Mapping.register(_CardAccessor)
+-collections.Sequence.register(_CardAccessor)
++collections.abc.Mapping.register(_CardAccessor)
++collections.abc.Sequence.register(_CardAccessor)
+ 
+ 
+ class _HeaderComments(_CardAccessor):
+diff --git a/astropy/table/np_utils.py b/astropy/table/np_utils.py
+index 1ee73c4..b4cb711 100644
+--- a/astropy/table/np_utils.py
++++ b/astropy/table/np_utils.py
+@@ -146,7 +146,7 @@ def common_dtype(cols):
+ 
+ def _check_for_sequence_of_structured_arrays(arrays):
+     err = &#x27;`arrays` arg must be a sequence (e.g. list) of structured arrays&#x27;
+-    if not isinstance(arrays, collections.Sequence):
++    if not isinstance(arrays, collections.abc.Sequence):
+         raise TypeError(err)
+     for array in arrays:
+         # Must be structured array
+diff --git a/astropy/table/operations.py b/astropy/table/operations.py
+index dea57bc..d981565 100644
+--- a/astropy/table/operations.py
++++ b/astropy/table/operations.py
+@@ -41,7 +41,7 @@ def _get_list_of_tables(tables):
+     from .table import Table, Row
+ 
+     # Make sure we have a list of things
+-    if not isinstance(tables, collections.Sequence):
++    if not isinstance(tables, collections.abc.Sequence):
+         tables = [tables]
+ 
+     # Make sure each thing is a Table or Row
+@@ -753,7 +753,7 @@ def _join(left, right, keys=None, join_type=&#x27;inner&#x27;,
+                     .format(out_name, out[out_name].__class__.__name__))
+ 
+     # If col_name_map supplied as a dict input, then update.
+-    if isinstance(_col_name_map, collections.Mapping):
++    if isinstance(_col_name_map, collections.abc.Mapping):
+         _col_name_map.update(col_name_map)
+ 
+     return out
+@@ -862,7 +862,7 @@ def _vstack(arrays, join_type=&#x27;outer&#x27;, col_name_map=None, metadata_conflicts=&#x27;wa
+             idx0 = idx1
+ 
+     # If col_name_map supplied as a dict input, then update.
+-    if isinstance(_col_name_map, collections.Mapping):
++    if isinstance(_col_name_map, collections.abc.Mapping):
+         _col_name_map.update(col_name_map)
+ 
+     return out
+@@ -960,7 +960,7 @@ def _hstack(arrays, join_type=&#x27;outer&#x27;, uniq_col_name=&#x27;{col_name}_{table_name}&#x27;,
+                 out[out_name] = array[name][:n_rows]
+ 
+     # If col_name_map supplied as a dict input, then update.
+-    if isinstance(_col_name_map, collections.Mapping):
++    if isinstance(_col_name_map, collections.abc.Mapping):
+         _col_name_map.update(col_name_map)
+ 
+     return out
+diff --git a/astropy/table/row.py b/astropy/table/row.py
+index 2926355..29f2145 100644
+--- a/astropy/table/row.py
++++ b/astropy/table/row.py
+@@ -179,4 +179,4 @@ class Row:
+         return str(self).encode(&#x27;utf-8&#x27;)
+ 
+ 
+-collections.Sequence.register(Row)
++collections.abc.Sequence.register(Row)
+diff --git a/astropy/utils/introspection.py b/astropy/utils/introspection.py
+index 3e784f9..eb95a08 100644
+--- a/astropy/utils/introspection.py
++++ b/astropy/utils/introspection.py
+@@ -6,7 +6,7 @@
+ import inspect
+ import types
+ import importlib
+-from distutils.version import LooseVersion
++from pkg_resources import parse_version
+ 
+ 
+ __all__ = [&#x27;resolve_name&#x27;, &#x27;minversion&#x27;, &#x27;find_current_module&#x27;,
+@@ -140,9 +140,9 @@ def minversion(module, version, inclusive=True, version_path=&#x27;__version__&#x27;):
+         have_version = resolve_name(module.__name__, version_path)
+ 
+     if inclusive:
+-        return LooseVersion(have_version) &gt;= LooseVersion(version)
++        return parse_version(have_version) &gt;= parse_version(version)
+     else:
+-        return LooseVersion(have_version) &gt; LooseVersion(version)
++        return parse_version(have_version) &gt; parse_version(version)
+ 
+ 
+ def find_current_module(depth=1, finddiff=False):
+diff --git a/astropy/utils/metadata.py b/astropy/utils/metadata.py
+index f5cc22a..41b5bb2 100644
+--- a/astropy/utils/metadata.py
++++ b/astropy/utils/metadata.py
+@@ -374,7 +374,7 @@ class MetaData:
+     &quot;&quot;&quot;
+     A descriptor for classes that have a ``meta`` property.
+ 
+-    This can be set to any valid `~collections.Mapping`.
++    This can be set to any valid `~collections.abc.Mapping`.
+ 
+     Parameters
+     ----------
+@@ -407,7 +407,7 @@ class MetaData:
+         if value is None:
+             instance._meta = OrderedDict()
+         else:
+-            if isinstance(value, collections.Mapping):
++            if isinstance(value, collections.abc.Mapping):
+                 if self.copy:
+                     instance._meta = deepcopy(value)
+                 else:
+diff --git a/astropy/utils/tests/test_introspection.py b/astropy/utils/tests/test_introspection.py
+index d8262d4..1f80a37 100644
+--- a/astropy/utils/tests/test_introspection.py
++++ b/astropy/utils/tests/test_introspection.py
+@@ -67,9 +67,24 @@ def test_minversion():
+     from types import ModuleType
+     test_module = ModuleType(str(&quot;test_module&quot;))
+     test_module.__version__ = &#x27;0.12.2&#x27;
+-    good_versions = [&#x27;0.12&#x27;, &#x27;0.12.1&#x27;, &#x27;0.12.0.dev&#x27;]
++    good_versions = [&#x27;0.12&#x27;, &#x27;0.12.1&#x27;, &#x27;0.12.0.dev&#x27;, &#x27;0.12dev&#x27;, &#x27;0.12.2rc1&#x27;]
+     bad_versions = [&#x27;1&#x27;, &#x27;1.2rc1&#x27;]
+     for version in good_versions:
+         assert minversion(test_module, version)
+     for version in bad_versions:
+         assert not minversion(test_module, version)
++
++
++def test_minversion_looseversion_bug():
++    &quot;&quot;&quot;
++    Regression test for astropy/utils/introspection.py&#x27;s use of
++    ``LooseVersion``, which fails on certain version strings (see
++    https://bugs.python.org/issue30272).  The function should fall back
++    to a comparison that handles dev-suffixes correctly.
++    &quot;&quot;&quot;
++    from types import ModuleType
++    test_module = ModuleType(str(&quot;test_module&quot;))
++    test_module.__version__ = &#x27;1.14.3&#x27;
++    # The original report: comparing 1.14.3 against 1.14dev used to
++    # raise TypeError under LooseVersion.
++    assert minversion(test_module, &#x27;1.14dev&#x27;)
+</code></pre>
+</details>
 </body></html>

@@ -1,0 +1,75 @@
+{
+  "run_id": "2026-06-20T09-24-56__claude-code__glm-5.2__astropy__astropy-12907",
+  "task_id": "astropy__astropy-12907",
+  "agent": "claude-code",
+  "agent_version": "2.1.153 (Claude Code)",
+  "model": "glm-5.2",
+  "mode": "local",
+  "status": "failed",
+  "started_at": "2026-06-20T09:22:57Z",
+  "duration_sec": 101.23367237497587,
+  "harness_git_sha": "79d47ce",
+  "task_source": {
+    "kind": "swe-bench",
+    "split": "test",
+    "original_id": "astropy__astropy-12907",
+    "swe_bench_commit": "c104f840cc67f8b6eec6f759ebc8b2693d585d4a"
+  },
+  "prompt": "Modeling's `separability_matrix` does not compute separability correctly for nested CompoundModels\nConsider the following model:\r\n\r\n```python\r\nfrom astropy.modeling import models as m\r\nfrom astropy.modeling.separable import separability_matrix\r\n\r\ncm = m.Linear1D(10) & m.Linear1D(5)\r\n```\r\n\r\nIt's separability matrix as you might expect is a diagonal:\r\n\r\n```python\r\n>>> separability_matrix(cm)\r\narray([[ True, False],\r\n       [False,  True]])\r\n```\r\n\r\nIf I make the model more complex:\r\n```python\r\n>>> separability_matrix(m.Pix2Sky_TAN() & m.Linear1D(10) & m.Linear1D(5))\r\narray([[ True,  True, False, False],\r\n       [ True,  True, False, False],\r\n       [False, False,  True, False],\r\n       [False, False, False,  True]])\r\n```\r\n\r\nThe output matrix is again, as expected, the outputs and inputs to the linear models are separable and independent of each other.\r\n\r\nIf however, I nest these compound models:\r\n```python\r\n>>> separability_matrix(m.Pix2Sky_TAN() & cm)\r\narray([[ True,  True, False, False],\r\n       [ True,  True, False, False],\r\n       [False, False,  True,  True],\r\n       [False, False,  True,  True]])\r\n```\r\nSuddenly the inputs and outputs are no longer separable?\r\n\r\nThis feels like a bug to me, but I might be missing something?\n",
+  "usage": {
+    "tokens_in": 68052,
+    "tokens_out": 3642,
+    "cache_read_tokens": 166528,
+    "cache_creation_tokens": 0,
+    "cost_usd": 0.5145740000000001,
+    "billing_mode": "api"
+  },
+  "test_results": {
+    "pre_flight": {
+      "fail_to_pass": {
+        "astropy/modeling/tests/test_separable.py::test_separable[compound_model6-result6]": "failed",
+        "astropy/modeling/tests/test_separable.py::test_separable[compound_model9-result9]": "failed"
+      },
+      "pass_to_pass": {
+        "astropy/modeling/tests/test_separable.py::test_coord_matrix": "passed",
+        "astropy/modeling/tests/test_separable.py::test_cdot": "passed",
+        "astropy/modeling/tests/test_separable.py::test_cstack": "passed",
+        "astropy/modeling/tests/test_separable.py::test_arith_oper": "passed",
+        "astropy/modeling/tests/test_separable.py::test_separable[compound_model0-result0]": "passed",
+        "astropy/modeling/tests/test_separable.py::test_separable[compound_model1-result1]": "passed",
+        "astropy/modeling/tests/test_separable.py::test_separable[compound_model2-result2]": "passed",
+        "astropy/modeling/tests/test_separable.py::test_separable[compound_model3-result3]": "passed",
+        "astropy/modeling/tests/test_separable.py::test_separable[compound_model4-result4]": "passed",
+        "astropy/modeling/tests/test_separable.py::test_separable[compound_model5-result5]": "passed",
+        "astropy/modeling/tests/test_separable.py::test_separable[compound_model7-result7]": "passed",
+        "astropy/modeling/tests/test_separable.py::test_separable[compound_model8-result8]": "passed",
+        "astropy/modeling/tests/test_separable.py::test_custom_model_separable": "passed"
+      }
+    },
+    "post_flight": {
+      "fail_to_pass": {
+        "astropy/modeling/tests/test_separable.py::test_separable[compound_model6-result6]": "failed",
+        "astropy/modeling/tests/test_separable.py::test_separable[compound_model9-result9]": "failed"
+      },
+      "pass_to_pass": {
+        "astropy/modeling/tests/test_separable.py::test_coord_matrix": "passed",
+        "astropy/modeling/tests/test_separable.py::test_cdot": "passed",
+        "astropy/modeling/tests/test_separable.py::test_cstack": "passed",
+        "astropy/modeling/tests/test_separable.py::test_arith_oper": "passed",
+        "astropy/modeling/tests/test_separable.py::test_separable[compound_model0-result0]": "passed",
+        "astropy/modeling/tests/test_separable.py::test_separable[compound_model1-result1]": "passed",
+        "astropy/modeling/tests/test_separable.py::test_separable[compound_model2-result2]": "passed",
+        "astropy/modeling/tests/test_separable.py::test_separable[compound_model3-result3]": "passed",
+        "astropy/modeling/tests/test_separable.py::test_separable[compound_model4-result4]": "passed",
+        "astropy/modeling/tests/test_separable.py::test_separable[compound_model5-result5]": "passed",
+        "astropy/modeling/tests/test_separable.py::test_separable[compound_model7-result7]": "passed",
+        "astropy/modeling/tests/test_separable.py::test_separable[compound_model8-result8]": "passed",
+        "astropy/modeling/tests/test_separable.py::test_custom_model_separable": "passed"
+      }
+    }
+  },
+  "patch": "diff --git a/CHANGES.rst b/CHANGES.rst\nindex ac1e622..43171e7 100644\n--- a/CHANGES.rst\n+++ b/CHANGES.rst\n@@ -7795,7 +7795,7 @@ astropy.table\n   e.g. ``t['a'] = 0``.  To force an in-place update use the pattern\n   ``t['a'][:] = [1, 2, 3]``. [#5556]\n \n-- Allow ``collections.Mapping``-like ``data`` attribute when initializing a\n+- Allow ``collections.abc.Mapping``-like ``data`` attribute when initializing a\n   ``Table`` object (``dict``-like was already possible). [#5213]\n \n astropy.tests\ndiff --git a/astropy/cosmology/io/mapping.py b/astropy/cosmology/io/mapping.py\nindex e1c172b..d8b44e2 100644\n--- a/astropy/cosmology/io/mapping.py\n+++ b/astropy/cosmology/io/mapping.py\n@@ -126,7 +126,7 @@ def to_mapping(cosmology, *args, cls=dict, cosmology_as_str=False, move_from_met\n         Not used. Needed for compatibility with\n         `~astropy.io.registry.UnifiedReadWriteMethod`\n     cls : type (optional, keyword-only)\n-        `dict` or `collections.Mapping` subclass.\n+        `dict` or `collections.abc.Mapping` subclass.\n         The mapping type to return. Default is `dict`.\n     cosmology_as_str : bool (optional, keyword-only)\n         Whether the cosmology value is the class (if `False`, default) or\ndiff --git a/astropy/modeling/tests/test_separable.py b/astropy/modeling/tests/test_separable.py\nindex 8dfe5c8..024b239 100644\n--- a/astropy/modeling/tests/test_separable.py\n+++ b/astropy/modeling/tests/test_separable.py\n@@ -28,6 +28,13 @@ p22 = models.Polynomial2D(2, name='p22')\n p1 = models.Polynomial1D(1, name='p1')\n \n \n+cm_4d_expected = (np.array([False, False, True, True]),\n+                  np.array([[True,  True,  False, False],\n+                            [True,  True,  False, False],\n+                            [False, False, True,  False],\n+                            [False, False, False, True]]))\n+\n+\n compound_models = {\n     'cm1': (map3 & sh1 | rot & sh1 | sh1 & sh2 & sh1,\n             (np.array([False, False, True]),\n@@ -52,7 +59,17 @@ compound_models = {\n     'cm7': (map2 | p2 & sh1,\n             (np.array([False, True]),\n              np.array([[True, False], [False, True]]))\n-            )\n+            ),\n+    'cm8': (rot & (sh1 & sh2), cm_4d_expected),\n+    'cm9': (rot & sh1 & sh2, cm_4d_expected),\n+    'cm10': ((rot & sh1) & sh2, cm_4d_expected),\n+    'cm11': (rot & sh1 & (scl1 & scl2),\n+             (np.array([False, False, True, True, True]),\n+              np.array([[True,  True,  False, False, False],\n+                        [True,  True,  False, False, False],\n+                        [False, False, True,  False, False],\n+                        [False, False, False, True,  False],\n+                        [False, False, False, False, True]]))),\n }\n \n \n",
+  "workdir": "/var/folders/wd/n_p084lj52xb8hbrg6m9zfdm0000gn/T/cae-lpc9hb8i",
+  "error": "",
+  "would_run_command": null
+}
