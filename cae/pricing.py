@@ -9,16 +9,18 @@ leaderboard, we look the model up in this table and compute::
             cache_read       * price_cache_read   +
             cache_creation   * price_cache_create) / 1_000_000
 
+The default rates live in ``cae/pricing.json`` (next to this module).
 All prices are USD per million tokens, from each provider's public list
 pricing. **Gateways and proxies may charge differently** — these are
 estimates for cases where the agent CLI doesn't report cost directly.
 If your actual cost differs, treat the computed number as an upper bound
 on the public-list cost, not a billable amount.
 
-To add a model: append to :data:`PRICING`. To override at runtime,
-set the ``CAE_PRICING_JSON`` env var to a JSON file mapping model names
-to ``{input, output, cache_read, cache_creation}`` dicts (those entries
-take precedence over the defaults here).
+To add a model: append to ``cae/pricing.json``. To override at runtime
+without editing the file, set the ``CAE_PRICING_JSON`` env var to a
+JSON file mapping model names to ``{input, output, cache_read,
+cache_creation}`` dicts — those entries take precedence over the
+defaults loaded here.
 """
 
 from __future__ import annotations
@@ -27,30 +29,29 @@ import json
 import os
 from pathlib import Path
 
-# USD per million tokens. cache_read is typically 10% of input for
-# providers that support prompt caching (Anthropic, OpenAI). cache_creation
-# is typically 1.25× input (Anthropic's write surcharge). Fields default
-# to 0 if missing — e.g. a model with no caching support just has input +
-# output entries.
-PRICING: dict[str, dict[str, float]] = {
-    # Anthropic — public list pricing as of mid-2026.
-    "claude-opus-4-7":    {"input": 15.0, "output": 75.0, "cache_read": 1.50, "cache_creation": 18.75},
-    "claude-sonnet-4-6":  {"input":  3.0, "output": 15.0, "cache_read": 0.30, "cache_creation":  3.75},
-    "claude-haiku-4-5":   {"input":  1.0, "output":  5.0, "cache_read": 0.10, "cache_creation":  1.25},
-    # OpenAI — approximate; OpenAI has tiered pricing and we list the
-    # standard tier. Cache read is 50% of input for OpenAI's automatic
-    # prompt caching (different discount than Anthropic's).
-    "gpt-5":              {"input":  5.0, "output": 15.0, "cache_read": 2.50},
-    "gpt-4o":             {"input":  2.50, "output": 10.0, "cache_read": 1.25},
-    "gpt-4o-mini":        {"input":  0.15, "output":  0.60, "cache_read": 0.075},
-    # MiniMax — direct-API list pricing as of mid-2026. No documented
-    # prompt-cache discount tier, so cache_read is set equal to input
-    # (conservative: cached tokens billed at the full input rate). If
-    # MiniMax introduces a cache discount, update cache_read here.
-    # OpenRouter often runs 50% launch promotions — if your gateway
-    # charges those rates, override via CAE_PRICING_JSON.
-    "MiniMax-M3":         {"input":  0.60, "output":  2.40, "cache_read": 0.60},
-}
+_PRICING_JSON_PATH = Path(__file__).resolve().parent / "pricing.json"
+
+
+def _load_default_pricing() -> dict[str, dict[str, float]]:
+    """Load the default pricing table from cae/pricing.json.
+
+    Crashes loudly if the file is missing or malformed — a broken
+    pricing table is a packaging bug, not a runtime fallback case.
+    Keys starting with ``_`` (e.g. ``_doc``) are doc-only entries and
+    are stripped before returning.
+    """
+    data = json.loads(_PRICING_JSON_PATH.read_text())
+    return {
+        model: prices
+        for model, prices in data.items()
+        if not model.startswith("_") and isinstance(prices, dict)
+    }
+
+
+# Load once at import time. Module-level so callers can `from cae.pricing
+# import PRICING` if they want to introspect the defaults (after any
+# runtime overrides, callers should use compute_cost() instead).
+PRICING: dict[str, dict[str, float]] = _load_default_pricing()
 
 
 def _load_user_overrides() -> dict[str, dict[str, float]]:
@@ -62,11 +63,12 @@ def _load_user_overrides() -> dict[str, dict[str, float]]:
         return {}
     try:
         data = json.loads(Path(path).read_text())
-        # Light validation: each value must be a dict of floats.
-        for model, prices in data.items():
-            if not isinstance(prices, dict):
-                raise ValueError(f"{model}: expected dict, got {type(prices).__name__}")
-        return data
+        # Strip doc-only keys + light validation, same as defaults.
+        return {
+            model: prices
+            for model, prices in data.items()
+            if not model.startswith("_") and isinstance(prices, dict)
+        }
     except Exception:
         return {}
 

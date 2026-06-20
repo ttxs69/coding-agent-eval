@@ -1,0 +1,16 @@
+{
+  "_doc": "USD per million tokens, from each provider's public list pricing as of mid-2026. Gateways and proxies may charge differently — these are estimates for cases where the agent CLI doesn't report cost directly. To override at runtime, set CAE_PRICING_JSON to a JSON file whose entries take precedence over these defaults. Field defaults if missing: input/output required; cache_read and cache_creation default to 0 (i.e., billed as zero, distinct from 'same as input').",
+
+  "_doc_anthropic": "Anthropic — cache_read is 10% of input, cache_creation is 1.25× input (the standard prompt-cache discount and write surcharge).",
+  "claude-opus-4-7":    {"input": 15.0, "output": 75.0, "cache_read": 1.50, "cache_creation": 18.75},
+  "claude-sonnet-4-6":  {"input":  3.0, "output": 15.0, "cache_read": 0.30, "cache_creation":  3.75},
+  "claude-haiku-4-5":   {"input":  1.0, "output":  5.0, "cache_read": 0.10, "cache_creation":  1.25},
+
+  "_doc_openai": "OpenAI — cache_read is 50% of input (their automatic prompt caching; different discount than Anthropic's). No separate cache_creation tier.",
+  "gpt-5":              {"input":  5.0, "output": 15.0, "cache_read": 2.50},
+  "gpt-4o":             {"input":  2.50, "output": 10.0, "cache_read": 1.25},
+  "gpt-4o-mini":        {"input":  0.15, "output":  0.60, "cache_read": 0.075},
+
+  "_doc_minimax": "MiniMax — no documented prompt-cache discount tier, so cache_read is set equal to input (conservative: cached tokens billed at the full input rate). OpenRouter often runs 50% launch promotions; override via CAE_PRICING_JSON if your gateway charges those rates.",
+  "MiniMax-M3":         {"input":  0.60, "output":  2.40, "cache_read": 0.60}
+}
