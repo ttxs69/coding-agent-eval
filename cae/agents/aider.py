@@ -21,11 +21,23 @@ from pathlib import Path
 from cae.agents.base import AgentResult, UsageInfo
 
 # Match the LAST occurrence in case aider prints interim tallies.
-# Shape: "Tokens: <int> sent, <int> received. Cost: $<float> message, $<float> session."
+# Shape: "Tokens: <n> sent, <n> received. Cost: $<float> message, $<float> session."
+# Aider humanizes large token counts (e.g. "8.4k", "1.2M") — the optional
+# suffix group handles both plain ints and humanized forms.
 _USAGE_RE = re.compile(
-    r"Tokens:\s*(?P<tin>\d+)\s+sent,\s*(?P<tout>\d+)\s+received\."
+    r"Tokens:\s*(?P<tin>\d+(?:\.\d+)?[kM]?)\s+sent,"
+    r"\s*(?P<tout>\d+(?:\.\d+)?[kM]?)\s+received\."
     r"\s*Cost:\s*\$(?P<cost>[\d.]+)\s+message,\s*\$(?P<session>[\d.]+)\s+session"
 )
+
+
+def _parse_humanized(s: str) -> int:
+    """'667' → 667, '8.4k' → 8400, '1.2M' → 1_200_000."""
+    if s.endswith("k"):
+        return int(float(s[:-1]) * 1_000)
+    if s.endswith("M"):
+        return int(float(s[:-1]) * 1_000_000)
+    return int(s)
 
 
 class AiderAdapter:
@@ -64,8 +76,8 @@ class AiderAdapter:
         matches = list(_USAGE_RE.finditer(stdout))
         if matches:
             m = matches[-1]
-            tokens_in = int(m.group("tin"))
-            tokens_out = int(m.group("tout"))
+            tokens_in = _parse_humanized(m.group("tin"))
+            tokens_out = _parse_humanized(m.group("tout"))
             # Session cost is the cumulative bill for the whole run; that's
             # what we want for the leaderboard. (Message cost is per-turn.)
             cost = float(m.group("session"))

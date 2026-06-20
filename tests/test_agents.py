@@ -306,26 +306,40 @@ def test_codex_parse_output_returns_none_cost_for_unknown_model(monkeypatch):
 
 def test_aider_parse_output_extracts_tokens_and_cost():
     """Aider prints 'Tokens: X sent, Y received. Cost: $Z message, $W session.'
-    to stdout at the end of a run. The adapter must extract tokens_in,
+    to stdout at the end of each run. The adapter must extract tokens_in,
     tokens_out, and cost_usd from that line — otherwise aider's leaderboard
-    row has $null cost (same gap codex had before its parser fix)."""
+    row has $null cost (same gap codex had before its parser fix).
+
+    Aider humanizes large numbers (e.g. '8.4k sent'), so the regex must
+    handle both plain ints ('667') and humanized forms ('8.4k', '1.2M')."""
     from cae.agents.aider import AiderAdapter
-    # Capture the actual shape aider prints (verified via `aider --message ...`).
+    # Real shape from a multi-turn SWE-bench run (verified manually):
+    # 'Tokens: 8.4k sent, 29 received. Cost: $0.04 message, $0.04 session.'
     fake_stdout = (
         "Aider v0.86.2\n"
-        "Model: anthropic/claude-opus-4-7 with whole edit format\n"
-        "Added hello.py to the chat.\n"
-        "Applied edit to hello.py\n"
+        "Applied edit to astropy/modeling/tests/test_separable.py\n"
         "\n"
-        "Tokens: 667 sent, 64 received. Cost: $0.0049 message, $0.0049 session.\n"
+        "Tokens: 8.4k sent, 29 received. Cost: $0.04 message, $0.04 session.\n"
     )
     result = AiderAdapter().parse_output(fake_stdout, "", 0)
-    assert result.usage.tokens_in == 667, f"expected 667 sent, got {result.usage.tokens_in}"
-    assert result.usage.tokens_out == 64, f"expected 64 received, got {result.usage.tokens_out}"
+    assert result.usage.tokens_in == 8400, f"expected 8.4k=8400, got {result.usage.tokens_in}"
+    assert result.usage.tokens_out == 29, f"expected 29, got {result.usage.tokens_out}"
     assert result.usage.cost_usd is not None
-    assert abs(result.usage.cost_usd - 0.0049) < 1e-6, (
-        f"expected cost ~0.0049 (aider's session cost), got {result.usage.cost_usd}"
+    assert abs(result.usage.cost_usd - 0.04) < 1e-6, (
+        f"expected session cost 0.04, got {result.usage.cost_usd}"
     )
+
+
+def test_aider_parse_output_handles_humanized_millions():
+    """Same parser must handle 1.2M-scale token counts (long agent runs)."""
+    from cae.agents.aider import AiderAdapter
+    fake_stdout = (
+        "Tokens: 1.2M sent, 4500 received. Cost: $5.67 message, $5.67 session.\n"
+    )
+    result = AiderAdapter().parse_output(fake_stdout, "", 0)
+    assert result.usage.tokens_in == 1_200_000
+    assert result.usage.tokens_out == 4500
+    assert abs(result.usage.cost_usd - 5.67) < 1e-6
 
 
 def test_aider_parse_output_handles_missing_usage_line():
