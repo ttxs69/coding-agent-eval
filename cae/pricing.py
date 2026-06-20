@@ -43,6 +43,13 @@ PRICING: dict[str, dict[str, float]] = {
     "gpt-5":              {"input":  5.0, "output": 15.0, "cache_read": 2.50},
     "gpt-4o":             {"input":  2.50, "output": 10.0, "cache_read": 1.25},
     "gpt-4o-mini":        {"input":  0.15, "output":  0.60, "cache_read": 0.075},
+    # MiniMax — direct-API list pricing as of mid-2026. No documented
+    # prompt-cache discount tier, so cache_read is set equal to input
+    # (conservative: cached tokens billed at the full input rate). If
+    # MiniMax introduces a cache discount, update cache_read here.
+    # OpenRouter often runs 50% launch promotions — if your gateway
+    # charges those rates, override via CAE_PRICING_JSON.
+    "MiniMax-M3":         {"input":  0.60, "output":  2.40, "cache_read": 0.60},
 }
 
 
