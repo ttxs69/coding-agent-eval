@@ -188,7 +188,9 @@ def test_aider_adapter_build_command_includes_prompt():
 
 
 def test_aider_parse_output_no_native_json():
-    """Aider doesn't emit JSON by default; cost is unknown."""
+    """Aider's usage is in a 'Tokens: X sent, Y received. Cost: $Z ...' line,
+    not JSON. If that line is missing from stdout (e.g. aider crashed early),
+    tokens + cost stay None — we don't guess."""
     from cae.agents.aider import AiderAdapter
     result = AiderAdapter().parse_output("Aider ran.", "", 0)
     assert result.usage.cost_usd is None
@@ -300,3 +302,41 @@ def test_codex_parse_output_returns_none_cost_for_unknown_model(monkeypatch):
     # Tokens still captured.
     assert result.usage.tokens_in == 1000
     assert result.usage.tokens_out == 100
+
+
+def test_aider_parse_output_extracts_tokens_and_cost():
+    """Aider prints 'Tokens: X sent, Y received. Cost: $Z message, $W session.'
+    to stdout at the end of a run. The adapter must extract tokens_in,
+    tokens_out, and cost_usd from that line — otherwise aider's leaderboard
+    row has $null cost (same gap codex had before its parser fix)."""
+    from cae.agents.aider import AiderAdapter
+    # Capture the actual shape aider prints (verified via `aider --message ...`).
+    fake_stdout = (
+        "Aider v0.86.2\n"
+        "Model: anthropic/claude-opus-4-7 with whole edit format\n"
+        "Added hello.py to the chat.\n"
+        "Applied edit to hello.py\n"
+        "\n"
+        "Tokens: 667 sent, 64 received. Cost: $0.0049 message, $0.0049 session.\n"
+    )
+    result = AiderAdapter().parse_output(fake_stdout, "", 0)
+    assert result.usage.tokens_in == 667, f"expected 667 sent, got {result.usage.tokens_in}"
+    assert result.usage.tokens_out == 64, f"expected 64 received, got {result.usage.tokens_out}"
+    assert result.usage.cost_usd is not None
+    assert abs(result.usage.cost_usd - 0.0049) < 1e-6, (
+        f"expected cost ~0.0049 (aider's session cost), got {result.usage.cost_usd}"
+    )
+
+
+def test_aider_parse_output_handles_missing_usage_line():
+    """If aider crashes before printing the Tokens/Cost line (or the format
+    changes), parse_output must not crash — return None tokens/cost and
+    preserve exit_code. Better to record a None-cost result than to lose
+    the whole run."""
+    from cae.agents.aider import AiderAdapter
+    fake_stdout = "Aider v0.86.2\nSome error happened before usage was printed.\n"
+    result = AiderAdapter().parse_output(fake_stdout, "", 99)
+    assert result.usage.tokens_in is None
+    assert result.usage.tokens_out is None
+    assert result.usage.cost_usd is None
+    assert result.exit_code == 99
