@@ -246,3 +246,57 @@ def test_real_adapters_satisfy_protocol():
         f"these adapters fail isinstance(x, AgentAdapter): {failing}. "
         f"Each must override validate_env() to satisfy the Protocol."
     )
+
+
+def test_codex_parse_output_computes_cost_from_tokens_for_known_model(monkeypatch):
+    """Codex CLI doesn't emit cost_usd in its turn.completed event — only
+    token counts. The adapter must compute cost = tokens × pricing for
+    models in the pricing table. Verifies the math: input + output + cache
+    fields each multiplied by their per-million-token price."""
+    from cae.agents.codex import CodexAdapter
+    # Bypass _discover_model() so the test is hermetic — we control which
+    # model the cost computation sees. claude-sonnet-4-6 is in the default
+    # pricing table.
+    adapter = CodexAdapter()
+    monkeypatch.setattr(adapter, "_discover_model", lambda: "claude-sonnet-4-6")
+    # Simulate codex's actual output shape (verified via `codex exec --json`):
+    # {"type":"turn.completed","usage":{"input_tokens":N,"cached_input_tokens":N,
+    #                                    "output_tokens":N,"reasoning_output_tokens":N}}
+    # No cost_usd field — codex CLI doesn't emit it.
+    fake_stdout = (
+        '{"type":"thread.started","thread_id":"x"}\n'
+        '{"type":"turn.started"}\n'
+        '{"type":"turn.completed","usage":{'
+        '"input_tokens":1000000,'
+        '"cached_input_tokens":500000,'
+        '"output_tokens":100000,'
+        '"reasoning_output_tokens":50000}}\n'
+    )
+    result = adapter.parse_output(fake_stdout, "", 0)
+    assert result.usage.cost_usd is not None, (
+        "cost_usd should be computed from tokens × pricing for known models"
+    )
+    assert result.usage.cost_usd > 0
+    # Token extraction still works (regression check).
+    assert result.usage.tokens_in == 1000000
+    assert result.usage.tokens_out == 100000
+    assert result.usage.cache_read_tokens == 500000
+
+
+def test_codex_parse_output_returns_none_cost_for_unknown_model(monkeypatch):
+    """If the model isn't in the pricing table, cost stays None — same as
+    the current behavior. We don't guess."""
+    from cae.agents.codex import CodexAdapter
+    adapter = CodexAdapter()
+    monkeypatch.setattr(adapter, "_discover_model", lambda: "some-unknown-experimental-model")
+    fake_stdout = (
+        '{"type":"turn.completed","usage":{'
+        '"input_tokens":1000,"output_tokens":100}}\n'
+    )
+    result = adapter.parse_output(fake_stdout, "", 0)
+    assert result.usage.cost_usd is None, (
+        "cost should be None when model isn't in the pricing table"
+    )
+    # Tokens still captured.
+    assert result.usage.tokens_in == 1000
+    assert result.usage.tokens_out == 100

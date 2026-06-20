@@ -84,6 +84,9 @@ class CodexAdapter:
                 obj = json.loads(line)
                 if obj.get("type") == "turn.completed":
                     usage = obj.get("usage") or {}
+                    # codex CLI does NOT emit cost_usd — only token counts.
+                    # If a future version adds it, prefer that value over
+                    # our computed estimate.
                     cost = usage.get("cost_usd")
                     tokens_in = usage.get("input_tokens")
                     tokens_out = usage.get("output_tokens")
@@ -98,6 +101,13 @@ class CodexAdapter:
         # If no model found in output, read from codex's config
         if model is None:
             model = self._discover_model()
+        # codex CLI doesn't emit cost — compute from tokens × pricing.
+        # Leaves cost as None if the model isn't in the pricing table
+        # (we don't guess). See cae/pricing.py for the table + how to
+        # override it with $CAE_PRICING_JSON.
+        if cost is None:
+            from cae.pricing import compute_cost
+            cost = compute_cost(model, tokens_in, tokens_out, cache_read, cache_creation)
         return AgentResult(
             log=stdout + stderr,
             usage=UsageInfo(
