@@ -214,5 +214,99 @@ index 8dfe5c8..024b239 100644
  
  
 </code></pre>
+</details><details open>
+<summary><strong>aider</strong> — resolved</summary>
+<p>Model: <code>anthropic/claude-opus-4-7</code> &middot;
+   Version: <code>aider 0.86.2</code> &middot;
+   Duration: 81s &middot;
+   Cost: $0.27</p>
+
+<h4>Test results</h4><table><thead><tr><th>Bucket</th><th>Test</th><th>Pre-flight</th><th>Post-flight</th></tr></thead><tbody><tr><td>Should now pass</td><td><code>astropy/modeling/tests/test_separable.py::test_separable[compound_model6-result6]</code></td><td>failed</td><td>passed</td></tr><tr><td>Should now pass</td><td><code>astropy/modeling/tests/test_separable.py::test_separable[compound_model9-result9]</code></td><td>failed</td><td>passed</td></tr><tr><td>Should still pass</td><td><code>astropy/modeling/tests/test_separable.py::test_coord_matrix</code></td><td>passed</td><td>passed</td></tr><tr><td>Should still pass</td><td><code>astropy/modeling/tests/test_separable.py::test_cdot</code></td><td>passed</td><td>passed</td></tr><tr><td>Should still pass</td><td><code>astropy/modeling/tests/test_separable.py::test_cstack</code></td><td>passed</td><td>passed</td></tr><tr><td>Should still pass</td><td><code>astropy/modeling/tests/test_separable.py::test_arith_oper</code></td><td>passed</td><td>passed</td></tr><tr><td>Should still pass</td><td><code>astropy/modeling/tests/test_separable.py::test_separable[compound_model0-result0]</code></td><td>passed</td><td>passed</td></tr><tr><td>Should still pass</td><td><code>astropy/modeling/tests/test_separable.py::test_separable[compound_model1-result1]</code></td><td>passed</td><td>passed</td></tr><tr><td>Should still pass</td><td><code>astropy/modeling/tests/test_separable.py::test_separable[compound_model2-result2]</code></td><td>passed</td><td>passed</td></tr><tr><td>Should still pass</td><td><code>astropy/modeling/tests/test_separable.py::test_separable[compound_model3-result3]</code></td><td>passed</td><td>passed</td></tr><tr><td>Should still pass</td><td><code>astropy/modeling/tests/test_separable.py::test_separable[compound_model4-result4]</code></td><td>passed</td><td>passed</td></tr><tr><td>Should still pass</td><td><code>astropy/modeling/tests/test_separable.py::test_separable[compound_model5-result5]</code></td><td>passed</td><td>passed</td></tr><tr><td>Should still pass</td><td><code>astropy/modeling/tests/test_separable.py::test_separable[compound_model7-result7]</code></td><td>passed</td><td>passed</td></tr><tr><td>Should still pass</td><td><code>astropy/modeling/tests/test_separable.py::test_separable[compound_model8-result8]</code></td><td>passed</td><td>passed</td></tr><tr><td>Should still pass</td><td><code>astropy/modeling/tests/test_separable.py::test_custom_model_separable</code></td><td>passed</td><td>passed</td></tr></tbody></table>
+<h4>Patch</h4><pre><code class="language-diff">diff --git a/.gitignore b/.gitignore
+index 1efe03b..834327a 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -86,3 +86,4 @@ v
+ 
+ .tmp
+ pip-wheel-metadata
++.aider*
+diff --git a/CHANGES.rst b/CHANGES.rst
+index ac1e622..43171e7 100644
+--- a/CHANGES.rst
++++ b/CHANGES.rst
+@@ -7795,7 +7795,7 @@ astropy.table
+   e.g. ``t[&#x27;a&#x27;] = 0``.  To force an in-place update use the pattern
+   ``t[&#x27;a&#x27;][:] = [1, 2, 3]``. [#5556]
+ 
+-- Allow ``collections.Mapping``-like ``data`` attribute when initializing a
++- Allow ``collections.abc.Mapping``-like ``data`` attribute when initializing a
+   ``Table`` object (``dict``-like was already possible). [#5213]
+ 
+ astropy.tests
+diff --git a/astropy/cosmology/io/mapping.py b/astropy/cosmology/io/mapping.py
+index e1c172b..d8b44e2 100644
+--- a/astropy/cosmology/io/mapping.py
++++ b/astropy/cosmology/io/mapping.py
+@@ -126,7 +126,7 @@ def to_mapping(cosmology, *args, cls=dict, cosmology_as_str=False, move_from_met
+         Not used. Needed for compatibility with
+         `~astropy.io.registry.UnifiedReadWriteMethod`
+     cls : type (optional, keyword-only)
+-        `dict` or `collections.Mapping` subclass.
++        `dict` or `collections.abc.Mapping` subclass.
+         The mapping type to return. Default is `dict`.
+     cosmology_as_str : bool (optional, keyword-only)
+         Whether the cosmology value is the class (if `False`, default) or
+diff --git a/astropy/modeling/separable.py b/astropy/modeling/separable.py
+index a308e27..45bea36 100644
+--- a/astropy/modeling/separable.py
++++ b/astropy/modeling/separable.py
+@@ -242,7 +242,7 @@ def _cstack(left, right):
+         cright = _coord_matrix(right, &#x27;right&#x27;, noutp)
+     else:
+         cright = np.zeros((noutp, right.shape[1]))
+-        cright[-right.shape[0]:, -right.shape[1]:] = 1
++        cright[-right.shape[0]:, -right.shape[1]:] = right
+ 
+     return np.hstack([cleft, cright])
+ 
+diff --git a/astropy/modeling/tests/test_separable.py b/astropy/modeling/tests/test_separable.py
+index 8dfe5c8..024b239 100644
+--- a/astropy/modeling/tests/test_separable.py
++++ b/astropy/modeling/tests/test_separable.py
+@@ -28,6 +28,13 @@ p22 = models.Polynomial2D(2, name=&#x27;p22&#x27;)
+ p1 = models.Polynomial1D(1, name=&#x27;p1&#x27;)
+ 
+ 
++cm_4d_expected = (np.array([False, False, True, True]),
++                  np.array([[True,  True,  False, False],
++                            [True,  True,  False, False],
++                            [False, False, True,  False],
++                            [False, False, False, True]]))
++
++
+ compound_models = {
+     &#x27;cm1&#x27;: (map3 &amp; sh1 | rot &amp; sh1 | sh1 &amp; sh2 &amp; sh1,
+             (np.array([False, False, True]),
+@@ -52,7 +59,17 @@ compound_models = {
+     &#x27;cm7&#x27;: (map2 | p2 &amp; sh1,
+             (np.array([False, True]),
+              np.array([[True, False], [False, True]]))
+-            )
++            ),
++    &#x27;cm8&#x27;: (rot &amp; (sh1 &amp; sh2), cm_4d_expected),
++    &#x27;cm9&#x27;: (rot &amp; sh1 &amp; sh2, cm_4d_expected),
++    &#x27;cm10&#x27;: ((rot &amp; sh1) &amp; sh2, cm_4d_expected),
++    &#x27;cm11&#x27;: (rot &amp; sh1 &amp; (scl1 &amp; scl2),
++             (np.array([False, False, True, True, True]),
++              np.array([[True,  True,  False, False, False],
++                        [True,  True,  False, False, False],
++                        [False, False, True,  False, False],
++                        [False, False, False, True,  False],
++                        [False, False, False, False, True]]))),
+ }
+ 
+ 
+</code></pre>
 </details>
 </body></html>
