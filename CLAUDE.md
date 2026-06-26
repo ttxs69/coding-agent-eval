@@ -93,7 +93,7 @@ Tests live in `tests/`. The tiny task fixture in `tests/fixtures/tiny_task/` is 
 
 - `site/` is gitignored — it's a build artifact.
 - The site is deployed to the `gh-pages` branch via `scripts/deploy_site.sh` (uses `git worktree` + `rsync` without `--delete` + `git push --force-with-lease`). The script is **non-destructive**: detail files on `gh-pages` that aren't in the current build (e.g. historical result details from previous evals) are preserved. To remove stale files from `gh-pages`, edit the worktree manually or run rsync with `--delete` locally — don't make destructive deploys the default.
-- **Leaderboard vs detail archive:** `index.html` reflects only what's in local `results/`. The `data/details/*.json` archive accumulates across deploys and is what per-task drill-down pages render against. If local `results/` is a subset of history, the main leaderboard will show fewer tasks than the per-task pages — known limitation, fix would require `cae build-site` to merge `gh-pages/data/details/` into its aggregation pass.
+- **Leaderboard vs detail archive:** `cae build-site --include-archive` (default off) fetches every `data/details/*.json` ever published to `origin/gh-pages` and merges it with local `results/` for the leaderboard aggregation. Local results win on duplicate `run_id` (local is newer). The flag is opt-in because it costs a `git fetch` per build; without it the leaderboard reflects only local `results/`, which means every fresh deploy can shrink the visible leaderboard as old result files are cleaned up locally. To get the full picture across deploys, pass `--include-archive` to `cae build-site` (and to `scripts/deploy_site.sh` if used).
 - Live site: <https://ttxs69.github.io/coding-agent-eval/>.
 
 ## Common gotchas
