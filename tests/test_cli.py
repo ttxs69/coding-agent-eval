@@ -747,3 +747,35 @@ def test_cae_run_per_stage_timeout_tests_aborts_long_running_pre_flight(
     assert data["status"] == "task_error", (
         f"expected task_error from pre-flight timeout, got {data['status']}"
     )
+
+
+def test_cae_build_site_accepts_include_archive_flag(tmp_path, monkeypatch):
+    """`cae build-site --include-archive` plumbs through to build_site
+    (which only consults the archive when the flag is set)."""
+    import cae.site as site_mod
+    from cae import cli
+
+    called = {"n": 0, "kw": None}
+    def fake_build(*args, **kwargs):
+        called["n"] += 1
+        called["kw"] = kwargs
+    monkeypatch.setattr(site_mod, "build_site", fake_build)
+
+    rc = cli.main(["build-site", "--results-dir", str(tmp_path),
+                   "--out-dir", str(tmp_path / "site"),
+                   "--include-archive"])
+    assert rc == 0
+    assert called["kw"].get("include_archive") is True
+
+
+def test_cae_build_site_default_include_archive_is_false(tmp_path, monkeypatch):
+    """Default (no --include-archive flag) must NOT pass include_archive=True."""
+    import cae.site as site_mod
+    from cae import cli
+    called = {"kw": None}
+    def fake_build(*args, **kwargs):
+        called["kw"] = kwargs
+    monkeypatch.setattr(site_mod, "build_site", fake_build)
+    cli.main(["build-site", "--results-dir", str(tmp_path),
+              "--out-dir", str(tmp_path / "site")])
+    assert called["kw"].get("include_archive") is False

@@ -52,9 +52,12 @@ done
 
 cd "$(dirname "$0")/.."
 
-# 1. Build the site.
+# 1. Build the site. --include-archive pulls every data/details/*.json ever
+#    published to origin/gh-pages and merges it with local results/ (local
+#    wins on duplicate run_id) so the leaderboard doesn't shrink across
+#    deploys. Costs a git fetch per build.
 echo "[deploy] building site from $RESULTS_DIR → $OUT_DIR"
-uv run cae build-site --results-dir "$RESULTS_DIR" --out-dir "$OUT_DIR"
+uv run cae build-site --results-dir "$RESULTS_DIR" --out-dir "$OUT_DIR" --include-archive
 
 # Out-dir without deploy: stop here.
 if [ "$OUT_DIR" != "site" ] && [ "$DRY_RUN" = 1 ]; then

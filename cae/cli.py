@@ -419,6 +419,7 @@ def cmd_build_site(args: argparse.Namespace) -> int:
         results_dir=Path(args.results_dir),
         out_dir=Path(args.out_dir),
         docs_dir=Path(args.docs_dir) if args.docs_dir else None,
+        include_archive=args.include_archive,
     )
     print(f"wrote site to {args.out_dir}")
     if args.publish:
@@ -585,6 +586,13 @@ def build_parser() -> argparse.ArgumentParser:
     p_bs.add_argument("--results-dir", default="results", help="where to read result JSONs")
     p_bs.add_argument("--out-dir", default="site", help="where to write the site (default: site)")
     p_bs.add_argument("--docs-dir", default="docs", help="where to find docs (for reproducibility.html)")
+    p_bs.add_argument("--include-archive", action="store_true",
+                      help="also pull data/details/*.json from origin/gh-pages and "
+                           "merge into the leaderboard (local results win on "
+                           "duplicate run_id). Without this flag, the leaderboard "
+                           "reflects only local results/ — every fresh deploy "
+                           "can shrink the visible leaderboard as old result "
+                           "files are cleaned up locally. Default: off.")
     p_bs.add_argument("--publish", action="store_true", help="also push via `gh` CLI (requires `gh` on PATH)")
     p_bs.set_defaults(func=cmd_build_site)
 
