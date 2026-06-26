@@ -224,3 +224,39 @@ def test_build_site_default_does_not_call_archive(monkeypatch, tmp_path):
 
     site_mod.build_site(local, tmp_path / "site")
     assert called["n"] == 0, "include_archive=False must not call the archive"
+
+
+def test_build_site_include_archive_cleans_up_temp_dir(monkeypatch, tmp_path):
+    """The temp merged dir created by _merge_results must be cleaned up
+    when build_site returns — otherwise /tmp/cae-merged-XXXX/ leaks
+    forever across repeated CI builds."""
+    from cae import site as site_mod
+    import json
+
+    local = tmp_path / "local_results"
+    local.mkdir()
+    (local / "LOCAL-1.json").write_text(json.dumps({
+        "run_id": "LOCAL-1", "agent": "claude-code", "task_id": "T1",
+        "status": "resolved", "usage": {"cost_usd": 1.0}, "test_results": {},
+        "patch": "", "workdir": "/tmp/wd", "error": "",
+    }))
+    archive = {"ARCHIVE-1": {
+        "run_id": "ARCHIVE-1", "agent": "codex", "task_id": "T2",
+        "status": "resolved", "usage": {"cost_usd": 0.5}, "test_results": {},
+        "patch": "", "workdir": "/tmp/wd", "error": "",
+    }}
+    monkeypatch.setattr(site_mod, "_fetch_archive_details", lambda **kw: archive)
+
+    merged_dirs = []
+    real_merge = site_mod._merge_results
+    def spy_merge(local, archive):
+        out = real_merge(local, archive)
+        merged_dirs.append(out)
+        return out
+    monkeypatch.setattr(site_mod, "_merge_results", spy_merge)
+
+    site_mod.build_site(local, tmp_path / "site", include_archive=True)
+    assert merged_dirs, "merge should have run"
+    assert not merged_dirs[0].exists(), (
+        f"temp merged dir {merged_dirs[0]} should be cleaned up after build"
+    )

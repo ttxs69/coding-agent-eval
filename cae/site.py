@@ -270,14 +270,27 @@ def build_site(
     aggregation pass — local results win on duplicate ``run_id``. Default
     False preserves byte-exact current behavior and skips the git fetch.
     """
+    import shutil
+    merged_dir: Path | None = None
     if include_archive:
         archive = _fetch_archive_details(remote="origin", branch="gh-pages")
         # If the archive is empty (no gh-pages branch, git failed, etc.)
         # fall through with the local dir unchanged — better to ship a
         # partial leaderboard than to fail the build.
         if archive:
-            results_dir = _merge_results(results_dir, archive)
+            merged_dir = _merge_results(results_dir, archive)
+            results_dir = merged_dir
 
+    try:
+        _build_site_inner(results_dir, out_dir, docs_dir)
+    finally:
+        # Clean up the temp merged dir even on failure — don't leak
+        # /tmp/cae-merged-XXXX/ forever on repeated CI builds.
+        if merged_dir is not None:
+            shutil.rmtree(merged_dir, ignore_errors=True)
+
+
+def _build_site_inner(results_dir: Path, out_dir: Path, docs_dir: Path | None) -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
     (out_dir / "data").mkdir(exist_ok=True)
     (out_dir / "tasks").mkdir(exist_ok=True)

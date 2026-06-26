@@ -30,16 +30,20 @@ def _extract_archive_via_git(remote: str, branch: str, dest: Path) -> Path:
     ``dest``. Returns the path to the extracted ``data/details`` directory.
 
     Raises if the git command fails (caller is expected to handle this).
+    Timeouts at 60s per git command — a hung fetch shouldn't block the deploy.
     """
     dest.mkdir(parents=True, exist_ok=True)
     # git archive writes a tar to stdout; pipe through tar -x to extract.
     # GitHub doesn't support --remote for archive, so fetch first then
     # archive from the local remote-tracking ref. Single shell pipe keeps
-    # this to one subprocess.
-    subprocess.run(["git", "fetch", remote, branch], check=True, capture_output=True)
+    # this to one subprocess. remote/branch are not user-controlled here
+    # (the harness calls with "origin" and "gh-pages"), so shell=True is
+    # safe; subprocess timeout guards against network hangs.
+    subprocess.run(["git", "fetch", remote, branch],
+                   check=True, capture_output=True, timeout=60)
     subprocess.run(
-        f"git archive {remote}/{branch} data/details/ | tar -xC {dest}",
-        shell=True, check=True,
+        f"git archive {remote}/{branch} -- data/details/ | tar -xC {dest}",
+        shell=True, check=True, timeout=60,
     )
     extracted = dest / "data" / "details"
     if not extracted.is_dir():
@@ -81,8 +85,9 @@ def _merge_results(local_dir: Path, archive: dict[str, dict]) -> Path:
     Local wins on collision: the user just produced it (or re-ran with
     ``--force``), so it's newer than the historical version on gh-pages.
 
-    The returned Path is a temp dir; the caller should not assume it
-    outlives the Python process. ``build_site`` uses it immediately.
+    IMPORTANT: the returned Path is owned by the caller — clean it up
+    (e.g. via ``shutil.rmtree``) when done. ``build_site`` wraps the
+    use in try/finally; tests clean up via ``tmp_path`` fixture.
     """
     merged = Path(tempfile.mkdtemp(prefix="cae-merged-"))
     # Local first.
@@ -99,9 +104,16 @@ def _merge_results(local_dir: Path, archive: dict[str, dict]) -> Path:
                 local_run_ids.add(data["run_id"])
         except Exception:
             continue
+    # Dedup archive against ITSELF too — if the archive dict has duplicate
+    # keys (shouldn't happen by construction since dicts are unique, but
+    # defensive in case the merge contract ever changes), the last write
+    # wins. Not worth raising — better to lose one stale entry than to
+    # abort the whole build.
+    written = set(local_run_ids)
     for run_id, data in archive.items():
-        if run_id in local_run_ids:
+        if run_id in written:
             continue
         out = merged / f"{run_id}.json"
         out.write_text(json.dumps(data, indent=2, default=str))
+        written.add(run_id)
     return merged
