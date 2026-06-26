@@ -16,6 +16,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from cae.metrics import aggregate_results
+from cae.site_archive import _fetch_archive_details, _merge_results
 
 
 def _now_iso() -> str:
@@ -256,8 +257,27 @@ code{{background:#f0f0f0;padding:1px 4px;border-radius:3px;font-size:90%}}
 </body></html>"""
 
 
-def build_site(results_dir: Path, out_dir: Path, docs_dir: Path | None = None) -> None:
-    """Generate the static site under out_dir."""
+def build_site(
+    results_dir: Path,
+    out_dir: Path,
+    docs_dir: Path | None = None,
+    include_archive: bool = False,
+) -> None:
+    """Generate the static site under out_dir.
+
+    With ``include_archive=True``, also pulls every ``data/details/*.json``
+    ever published to ``origin/gh-pages`` and merges it into the
+    aggregation pass — local results win on duplicate ``run_id``. Default
+    False preserves byte-exact current behavior and skips the git fetch.
+    """
+    if include_archive:
+        archive = _fetch_archive_details(remote="origin", branch="gh-pages")
+        # If the archive is empty (no gh-pages branch, git failed, etc.)
+        # fall through with the local dir unchanged — better to ship a
+        # partial leaderboard than to fail the build.
+        if archive:
+            results_dir = _merge_results(results_dir, archive)
+
     out_dir.mkdir(parents=True, exist_ok=True)
     (out_dir / "data").mkdir(exist_ok=True)
     (out_dir / "tasks").mkdir(exist_ok=True)

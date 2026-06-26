@@ -165,3 +165,62 @@ def test_fetch_archive_details_returns_empty_when_git_fails(monkeypatch):
     monkeypatch.setattr(site_archive, "_extract_archive_via_git", raising_extractor)
     archive = site_archive._fetch_archive_details(remote="origin", branch="gh-pages")
     assert archive == {}
+
+
+def test_build_site_with_include_archive_merges_with_remote(monkeypatch, tmp_path):
+    """With include_archive=True, build_site aggregates local results +
+    every archive entry whose run_id doesn't collide. Without
+    include_archive, behavior is unchanged (default off)."""
+    from cae import site as site_mod
+    import json
+
+    # Set up a local results dir with one file.
+    local = tmp_path / "local_results"
+    local.mkdir()
+    (local / "LOCAL-1.json").write_text(json.dumps({
+        "run_id": "LOCAL-1", "agent": "claude-code", "task_id": "T1",
+        "status": "resolved", "usage": {"cost_usd": 1.0}, "test_results": {},
+        "patch": "", "workdir": "/tmp/wd", "error": "",
+    }))
+
+    # Mock the archive: a single extra run with a different run_id.
+    archive_data = {"ARCHIVE-1": {
+        "run_id": "ARCHIVE-1", "agent": "codex", "task_id": "T2",
+        "status": "resolved", "usage": {"cost_usd": 0.5}, "test_results": {},
+        "patch": "", "workdir": "/tmp/wd", "error": "",
+    }}
+    monkeypatch.setattr(site_mod, "_fetch_archive_details", lambda **kw: archive_data)
+
+    out = tmp_path / "site"
+    site_mod.build_site(local, out, include_archive=True)
+
+    # Leaderboard shows BOTH rows (local + archive).
+    rows = json.loads((out / "data" / "results.json").read_text())
+    agents = {r["agent"] for r in rows}
+    assert "claude-code" in agents
+    assert "codex" in agents
+
+
+def test_build_site_default_does_not_call_archive(monkeypatch, tmp_path):
+    """Default include_archive=False must NOT touch the git archive —
+    that's the whole point of opt-in. Verifies the flag is wired through,
+    not silently always-on."""
+    from cae import site as site_mod
+    import json
+
+    called = {"n": 0}
+    def spy(**kw):
+        called["n"] += 1
+        return {}
+    monkeypatch.setattr(site_mod, "_fetch_archive_details", spy)
+
+    local = tmp_path / "local_results"
+    local.mkdir()
+    (local / "LOCAL-1.json").write_text(json.dumps({
+        "run_id": "LOCAL-1", "agent": "claude-code", "task_id": "T1",
+        "status": "resolved", "usage": {"cost_usd": 1.0}, "test_results": {},
+        "patch": "", "workdir": "/tmp/wd", "error": "",
+    }))
+
+    site_mod.build_site(local, tmp_path / "site")
+    assert called["n"] == 0, "include_archive=False must not call the archive"
