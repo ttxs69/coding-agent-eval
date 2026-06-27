@@ -779,3 +779,38 @@ def test_cae_build_site_default_include_archive_is_false(tmp_path, monkeypatch):
     cli.main(["build-site", "--results-dir", str(tmp_path),
               "--out-dir", str(tmp_path / "site")])
     assert called["kw"].get("include_archive") is False
+
+
+def test_cae_report_accepts_include_archive_flag(tmp_path, monkeypatch):
+    """`cae report --include-archive` plumbs through to the archive
+    merge, so the local console report shows historical runs (matching
+    the published site's behavior, since deploy_site.sh now uses
+    --include-archive by default)."""
+    from cae import cli
+
+    captured = {"include_archive": None}
+    def fake_aggregate(results_dir, include_archive):
+        captured["include_archive"] = include_archive
+        return []
+    monkeypatch.setattr(cli, "_aggregate_with_archive", fake_aggregate)
+    rc = cli.main(["report", "--results-dir", str(tmp_path),
+                   "--include-archive"])
+    assert rc == 0
+    assert captured["include_archive"] is True, (
+        f"--include-archive should reach the aggregate helper, "
+        f"got include_archive={captured['include_archive']!r}"
+    )
+
+
+def test_cae_report_default_include_archive_is_false(tmp_path, monkeypatch):
+    """Default (no --include-archive flag) must NOT pull the archive —
+    the local report should stay fast, since the fetch is the cost."""
+    from cae import cli
+    captured = {"include_archive": None}
+    def fake_aggregate(results_dir, include_archive):
+        captured["include_archive"] = include_archive
+        return []
+    monkeypatch.setattr(cli, "_aggregate_with_archive", fake_aggregate)
+    rc = cli.main(["report", "--results-dir", str(tmp_path)])
+    assert rc == 0
+    assert captured["include_archive"] is False
