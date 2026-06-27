@@ -23,6 +23,28 @@ from pathlib import Path
 ATTEMPTED_STATUSES = {"resolved", "failed", "timeout", "agent_error"}
 
 
+def _wilson_ci(successes: int, n: int, z: float = 1.96) -> tuple[float, float]:
+    """Wilson 95% confidence interval for a binomial proportion.
+
+    For small N (which is the leaderboard's normal case — single-digit
+    task counts) the naive ``p ± z·sqrt(p(1-p)/n)`` can produce intervals
+    outside [0, 1] or even the upper bound below the observed proportion.
+    Wilson's score interval avoids both pathologies and is the standard
+    "show me the uncertainty" answer for tiny samples.
+
+    Returns ``(low, high)``. When ``n == 0`` returns ``(0.0, 0.0)`` so the
+    leaderboard renderer doesn't crash on a brand-new agent with no
+    attempts yet — the caller can detect this via ``n_attempted == 0``.
+    """
+    if n == 0:
+        return (0.0, 0.0)
+    p = successes / n
+    denom = 1 + z * z / n
+    centre = (p + z * z / (2 * n)) / denom
+    half = (z * (z * z / (4 * n * n) + p * (1 - p) / n) ** 0.5) / denom
+    return (max(0.0, centre - half), min(1.0, centre + half))
+
+
 def _median(values: list[float | None]) -> float | None:
     non_null = [v for v in values if v is not None]
     if not non_null:
@@ -66,6 +88,11 @@ def aggregate_results(results_dir: Path) -> list[dict]:
             "n_attempted": n_attempted,
             "n_skipped_harness": n_skipped,
             "pass_rate": n_resolved / n_attempted if n_attempted else 0.0,
+            # Wilson 95% CI for the pass rate. Tells the reader the
+            # "67%" row is actually "67% ± 20%" — important for tiny
+            # samples (the leaderboard's normal case).
+            "pass_rate_ci_low":  _wilson_ci(n_resolved, n_attempted)[0],
+            "pass_rate_ci_high": _wilson_ci(n_resolved, n_attempted)[1],
             "median_cost_usd": _median([(r.get("usage") or {}).get("cost_usd") for r in attempted]),
             "median_duration_sec": _median([r.get("duration_sec") for r in attempted]),
             "median_tokens_in": _median([(r.get("usage") or {}).get("tokens_in") for r in attempted]),

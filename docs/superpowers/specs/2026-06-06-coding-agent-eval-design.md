@@ -313,7 +313,7 @@ Broken tasks and agent crashes must not silently count as "failed" alongside leg
 - **`data/results.json`** — one row per (agent, model, agent_version) tuple with: `pass_rate`, `n_resolved`, `n_attempted`, median `cost_usd`, median `duration_sec`, median `tokens_in` / `tokens_out`, and `last_run` timestamp.
 - **`data/details/<task_id>__<agent>.json`** — per-run detail for the per-task pages.
 
-**Median unit:** each row's medians are computed over **all individual runs** in `results/` for that (agent, model, agent_version) tuple. If a user runs `--repeat 3` on a task, all three runs are data points (this is intentional — it lets users opt into variance measurement). Median over a small `n` is reported as-is; no bootstrap or confidence interval in v1.
+**Median unit:** each row's medians are computed over **all individual runs** in `results/` for that (agent, model, agent_version) tuple. If a user runs `--repeat 3` on a task, all three runs are data points (this is intentional — it lets users opt into variance measurement). **Pass rate** additionally carries a 95% Wilson confidence interval in every leaderboard row (`pass_rate_ci_low`, `pass_rate_ci_high`); the rendered table shows e.g. `67% (CI 21–94%)` so readers see how noisy a 3-task sample is. Other median columns are reported as-is — no bootstrap, no CI.
 
 **`n_attempted` is the count of unique tasks** in `results/` for that row, not the count of runs. This makes `5/5` comparable to `32/50`: a row with `--repeat 3` on 10 tasks shows `n_attempted: 10`, not `30`. The run count is implicit in the medians.
 
