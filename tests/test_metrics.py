@@ -159,3 +159,62 @@ def test_aggregate_pass_at_k_resolves_if_any_repeat_resolves(tmp_path):
     assert rows[0]["n_attempted"] == 2  # t1, t2
     assert rows[0]["n_resolved"] == 1   # t1 (one repeat resolved)
     assert rows[0]["pass_rate"] == 0.5
+
+
+def test_wilson_ci_basic_case():
+    """For 2/3 success, the 95% Wilson CI should be roughly (20%, 94%).
+    Hand-checked against the standard formula — see
+    https://en.wikipedia.org/wiki/Binomial_proportion_confidence_interval."""
+    from cae.metrics import _wilson_ci
+    low, high = _wilson_ci(2, 3)
+    assert 0.15 < low < 0.30, f"low={low}"
+    assert 0.88 < high < 0.98, f"high={high}"
+
+
+def test_wilson_ci_perfect_score():
+    """3/3 success → low near 30%, high 100%."""
+    from cae.metrics import _wilson_ci
+    low, high = _wilson_ci(3, 3)
+    assert 0.25 < low < 0.45, f"low={low}"
+    assert high == 1.0, f"high={high} (should be exactly 1.0 for all-success)"
+
+
+def test_wilson_ci_zero_successes():
+    """0/3 success → low = 0.0, high roughly 60-70%."""
+    from cae.metrics import _wilson_ci
+    low, high = _wilson_ci(0, 3)
+    assert low == 0.0
+    assert 0.55 < high < 0.80, f"high={high}"
+
+
+def test_wilson_ci_zero_total_returns_neutral():
+    """0/0 (no attempts) → return (0.0, 0.0) so the CI column doesn't
+    crash the renderer. The leaderboard row's n_attempted is 0 in this
+    case, so pass_rate is also 0.0 — caller can decide not to render the CI."""
+    from cae.metrics import _wilson_ci
+    low, high = _wilson_ci(0, 0)
+    assert low == 0.0
+    assert high == 0.0
+
+
+def test_aggregate_results_includes_wilson_ci_fields(tmp_path):
+    """aggregate_results should add pass_rate_ci_low / pass_rate_ci_high
+    to every row so the leaderboard renderer can display the uncertainty
+    alongside the point estimate."""
+    import json
+    results = tmp_path / "results"
+    results.mkdir()
+    # 2 resolved of 3 attempts for claude-code
+    for i, status in enumerate(["resolved", "resolved", "failed"]):
+        (results / f"r{i}.json").write_text(json.dumps({
+            "agent": "claude-code", "model": "m", "agent_version": "1.0",
+            "task_id": f"t{i}", "status": status, "started_at": "2026-06-27T00:00:00Z",
+            "duration_sec": 100, "usage": {"cost_usd": 0.1},
+        }))
+    from cae.metrics import aggregate_results
+    rows = aggregate_results(results)
+    assert len(rows) == 1
+    assert "pass_rate_ci_low" in rows[0]
+    assert "pass_rate_ci_high" in rows[0]
+    assert 0.15 < rows[0]["pass_rate_ci_low"] < 0.30
+    assert 0.88 < rows[0]["pass_rate_ci_high"] < 0.98
