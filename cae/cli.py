@@ -464,11 +464,38 @@ def _publish_site(out_dir: Path) -> int:
     return 0
 
 
-def cmd_report(args: argparse.Namespace) -> int:
+def _aggregate_with_archive(results_dir: Path, include_archive: bool) -> list[dict]:
+    """Local version of the archive-hydration path used by cae build-site.
+    Returns the same aggregated rows that aggregate_results would produce,
+    but with gh-pages archive merged in when ``include_archive=True``.
+
+    Kept in cae/cli.py (rather than cae/site.py) because the local
+    console report is a different consumer than the static site: it
+    needs the rows directly, not on disk. We reuse the same
+    ``_merge_results`` helper from site_archive so the two views stay
+    consistent — the local report and the deployed site show the same
+    leaderboard numbers.
+    """
     from cae.metrics import aggregate_results
+    from cae.site_archive import _fetch_archive_details, _merge_results
+
+    if not include_archive:
+        return aggregate_results(results_dir)
+    archive = _fetch_archive_details(remote="origin", branch="gh-pages")
+    if not archive:
+        return aggregate_results(results_dir)
+    import shutil
+    merged_dir = _merge_results(results_dir, archive)
+    try:
+        return aggregate_results(merged_dir)
+    finally:
+        shutil.rmtree(merged_dir, ignore_errors=True)
+
+
+def cmd_report(args: argparse.Namespace) -> int:
     from cae.render_table import render_table
     from cae.site import _fmt_pass_rate
-    rows = aggregate_results(Path(args.results_dir))
+    rows = _aggregate_with_archive(Path(args.results_dir), args.include_archive)
     if args.format == "table":
         headers = ["AGENT", "MODEL", "PASS RATE (95% CI)", "N", "SKIPPED", "MEDIAN COST", "MEDIAN DUR (s)", "LAST RUN"]
         def fmt_cost(v):
@@ -581,6 +608,12 @@ def build_parser() -> argparse.ArgumentParser:
     p_rep = sub.add_parser("report", help="aggregate and display results")
     p_rep.add_argument("--results-dir", default="results", help="where to read result JSONs (default: results)")
     p_rep.add_argument("--format", default="table", choices=["table", "json"], help="output format (default: table)")
+    p_rep.add_argument("--include-archive", action="store_true",
+                      help="also pull data/details/*.json from origin/gh-pages and "
+                           "merge into the local report. Same hydration the published "
+                           "site uses; costs a git fetch. Without it, the report shows "
+                           "only local results/, which may be a strict subset of what "
+                           "the deployed leaderboard shows.")
     p_rep.set_defaults(func=cmd_report)
 
     p_bs = sub.add_parser("build-site", help="build the static leaderboard site")
