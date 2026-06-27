@@ -1,0 +1,71 @@
+{
+  "run_id": "2026-06-08T04-38-38__claude-code__astropy__astropy-12907",
+  "task_id": "astropy__astropy-12907",
+  "agent": "claude-code",
+  "agent_version": "2.1.153 (Claude Code)",
+  "model": "glm-5.1",
+  "mode": "local",
+  "status": "resolved",
+  "started_at": "2026-06-08T04:38:38Z",
+  "duration_sec": 166.31530570797622,
+  "harness_git_sha": "8fdca78",
+  "task_source": {
+    "kind": "swe-bench",
+    "split": "test",
+    "original_id": "astropy__astropy-12907",
+    "swe_bench_commit": "c104f840cc67f8b6eec6f759ebc8b2693d585d4a"
+  },
+  "usage": {
+    "tokens_in": 32627,
+    "tokens_out": 5660,
+    "cost_usd": 0.538523,
+    "billing_mode": "api"
+  },
+  "test_results": {
+    "pre_flight": {
+      "fail_to_pass": {
+        "astropy/modeling/tests/test_separable.py::test_separable[compound_model6-result6]": "failed",
+        "astropy/modeling/tests/test_separable.py::test_separable[compound_model9-result9]": "failed"
+      },
+      "pass_to_pass": {
+        "astropy/modeling/tests/test_separable.py::test_coord_matrix": "passed",
+        "astropy/modeling/tests/test_separable.py::test_cdot": "passed",
+        "astropy/modeling/tests/test_separable.py::test_cstack": "passed",
+        "astropy/modeling/tests/test_separable.py::test_arith_oper": "passed",
+        "astropy/modeling/tests/test_separable.py::test_separable[compound_model0-result0]": "passed",
+        "astropy/modeling/tests/test_separable.py::test_separable[compound_model1-result1]": "passed",
+        "astropy/modeling/tests/test_separable.py::test_separable[compound_model2-result2]": "passed",
+        "astropy/modeling/tests/test_separable.py::test_separable[compound_model3-result3]": "passed",
+        "astropy/modeling/tests/test_separable.py::test_separable[compound_model4-result4]": "passed",
+        "astropy/modeling/tests/test_separable.py::test_separable[compound_model5-result5]": "passed",
+        "astropy/modeling/tests/test_separable.py::test_separable[compound_model7-result7]": "passed",
+        "astropy/modeling/tests/test_separable.py::test_separable[compound_model8-result8]": "passed",
+        "astropy/modeling/tests/test_separable.py::test_custom_model_separable": "passed"
+      }
+    },
+    "post_flight": {
+      "fail_to_pass": {
+        "astropy/modeling/tests/test_separable.py::test_separable[compound_model6-result6]": "passed",
+        "astropy/modeling/tests/test_separable.py::test_separable[compound_model9-result9]": "passed"
+      },
+      "pass_to_pass": {
+        "astropy/modeling/tests/test_separable.py::test_coord_matrix": "passed",
+        "astropy/modeling/tests/test_separable.py::test_cdot": "passed",
+        "astropy/modeling/tests/test_separable.py::test_cstack": "passed",
+        "astropy/modeling/tests/test_separable.py::test_arith_oper": "passed",
+        "astropy/modeling/tests/test_separable.py::test_separable[compound_model0-result0]": "passed",
+        "astropy/modeling/tests/test_separable.py::test_separable[compound_model1-result1]": "passed",
+        "astropy/modeling/tests/test_separable.py::test_separable[compound_model2-result2]": "passed",
+        "astropy/modeling/tests/test_separable.py::test_separable[compound_model3-result3]": "passed",
+        "astropy/modeling/tests/test_separable.py::test_separable[compound_model4-result4]": "passed",
+        "astropy/modeling/tests/test_separable.py::test_separable[compound_model5-result5]": "passed",
+        "astropy/modeling/tests/test_separable.py::test_separable[compound_model7-result7]": "passed",
+        "astropy/modeling/tests/test_separable.py::test_separable[compound_model8-result8]": "passed",
+        "astropy/modeling/tests/test_separable.py::test_custom_model_separable": "passed"
+      }
+    }
+  },
+  "patch": "diff --git a/astropy/modeling/separable.py b/astropy/modeling/separable.py\nindex a308e27..45bea36 100644\n--- a/astropy/modeling/separable.py\n+++ b/astropy/modeling/separable.py\n@@ -242,7 +242,7 @@ def _cstack(left, right):\n         cright = _coord_matrix(right, 'right', noutp)\n     else:\n         cright = np.zeros((noutp, right.shape[1]))\n-        cright[-right.shape[0]:, -right.shape[1]:] = 1\n+        cright[-right.shape[0]:, -right.shape[1]:] = right\n \n     return np.hstack([cleft, cright])\n \ndiff --git a/astropy/modeling/tests/test_separable.py b/astropy/modeling/tests/test_separable.py\nindex 8dfe5c8..024b239 100644\n--- a/astropy/modeling/tests/test_separable.py\n+++ b/astropy/modeling/tests/test_separable.py\n@@ -28,6 +28,13 @@ p22 = models.Polynomial2D(2, name='p22')\n p1 = models.Polynomial1D(1, name='p1')\n \n \n+cm_4d_expected = (np.array([False, False, True, True]),\n+                  np.array([[True,  True,  False, False],\n+                            [True,  True,  False, False],\n+                            [False, False, True,  False],\n+                            [False, False, False, True]]))\n+\n+\n compound_models = {\n     'cm1': (map3 & sh1 | rot & sh1 | sh1 & sh2 & sh1,\n             (np.array([False, False, True]),\n@@ -52,7 +59,17 @@ compound_models = {\n     'cm7': (map2 | p2 & sh1,\n             (np.array([False, True]),\n              np.array([[True, False], [False, True]]))\n-            )\n+            ),\n+    'cm8': (rot & (sh1 & sh2), cm_4d_expected),\n+    'cm9': (rot & sh1 & sh2, cm_4d_expected),\n+    'cm10': ((rot & sh1) & sh2, cm_4d_expected),\n+    'cm11': (rot & sh1 & (scl1 & scl2),\n+             (np.array([False, False, True, True, True]),\n+              np.array([[True,  True,  False, False, False],\n+                        [True,  True,  False, False, False],\n+                        [False, False, True,  False, False],\n+                        [False, False, False, True,  False],\n+                        [False, False, False, False, True]]))),\n }\n \n \n",
+  "workdir": "/var/folders/wd/n_p084lj52xb8hbrg6m9zfdm0000gn/T/cae-tp0lmwvi",
+  "error": ""
+}

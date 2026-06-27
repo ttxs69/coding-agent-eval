@@ -58,6 +58,124 @@ Suddenly the inputs and outputs are no longer separable?
 This feels like a bug to me, but I might be missing something?
 </pre>
 <details open>
+<summary><strong>claude-code</strong> — resolved</summary>
+<p>Model: <code>glm-5.1</code> &middot;
+   Version: <code>2.1.153 (Claude Code)</code> &middot;
+   Duration: 166s &middot;
+   Cost: $0.54</p>
+
+<h4>Test results</h4><table><thead><tr><th>Bucket</th><th>Test</th><th>Pre-flight</th><th>Post-flight</th></tr></thead><tbody><tr><td>Should now pass</td><td><code>astropy/modeling/tests/test_separable.py::test_separable[compound_model6-result6]</code></td><td>failed</td><td>passed</td></tr><tr><td>Should now pass</td><td><code>astropy/modeling/tests/test_separable.py::test_separable[compound_model9-result9]</code></td><td>failed</td><td>passed</td></tr><tr><td>Should still pass</td><td><code>astropy/modeling/tests/test_separable.py::test_coord_matrix</code></td><td>passed</td><td>passed</td></tr><tr><td>Should still pass</td><td><code>astropy/modeling/tests/test_separable.py::test_cdot</code></td><td>passed</td><td>passed</td></tr><tr><td>Should still pass</td><td><code>astropy/modeling/tests/test_separable.py::test_cstack</code></td><td>passed</td><td>passed</td></tr><tr><td>Should still pass</td><td><code>astropy/modeling/tests/test_separable.py::test_arith_oper</code></td><td>passed</td><td>passed</td></tr><tr><td>Should still pass</td><td><code>astropy/modeling/tests/test_separable.py::test_separable[compound_model0-result0]</code></td><td>passed</td><td>passed</td></tr><tr><td>Should still pass</td><td><code>astropy/modeling/tests/test_separable.py::test_separable[compound_model1-result1]</code></td><td>passed</td><td>passed</td></tr><tr><td>Should still pass</td><td><code>astropy/modeling/tests/test_separable.py::test_separable[compound_model2-result2]</code></td><td>passed</td><td>passed</td></tr><tr><td>Should still pass</td><td><code>astropy/modeling/tests/test_separable.py::test_separable[compound_model3-result3]</code></td><td>passed</td><td>passed</td></tr><tr><td>Should still pass</td><td><code>astropy/modeling/tests/test_separable.py::test_separable[compound_model4-result4]</code></td><td>passed</td><td>passed</td></tr><tr><td>Should still pass</td><td><code>astropy/modeling/tests/test_separable.py::test_separable[compound_model5-result5]</code></td><td>passed</td><td>passed</td></tr><tr><td>Should still pass</td><td><code>astropy/modeling/tests/test_separable.py::test_separable[compound_model7-result7]</code></td><td>passed</td><td>passed</td></tr><tr><td>Should still pass</td><td><code>astropy/modeling/tests/test_separable.py::test_separable[compound_model8-result8]</code></td><td>passed</td><td>passed</td></tr><tr><td>Should still pass</td><td><code>astropy/modeling/tests/test_separable.py::test_custom_model_separable</code></td><td>passed</td><td>passed</td></tr></tbody></table>
+<h4>Patch</h4><pre><code class="language-diff">diff --git a/astropy/modeling/separable.py b/astropy/modeling/separable.py
+index a308e27..45bea36 100644
+--- a/astropy/modeling/separable.py
++++ b/astropy/modeling/separable.py
+@@ -242,7 +242,7 @@ def _cstack(left, right):
+         cright = _coord_matrix(right, &#x27;right&#x27;, noutp)
+     else:
+         cright = np.zeros((noutp, right.shape[1]))
+-        cright[-right.shape[0]:, -right.shape[1]:] = 1
++        cright[-right.shape[0]:, -right.shape[1]:] = right
+ 
+     return np.hstack([cleft, cright])
+ 
+diff --git a/astropy/modeling/tests/test_separable.py b/astropy/modeling/tests/test_separable.py
+index 8dfe5c8..024b239 100644
+--- a/astropy/modeling/tests/test_separable.py
++++ b/astropy/modeling/tests/test_separable.py
+@@ -28,6 +28,13 @@ p22 = models.Polynomial2D(2, name=&#x27;p22&#x27;)
+ p1 = models.Polynomial1D(1, name=&#x27;p1&#x27;)
+ 
+ 
++cm_4d_expected = (np.array([False, False, True, True]),
++                  np.array([[True,  True,  False, False],
++                            [True,  True,  False, False],
++                            [False, False, True,  False],
++                            [False, False, False, True]]))
++
++
+ compound_models = {
+     &#x27;cm1&#x27;: (map3 &amp; sh1 | rot &amp; sh1 | sh1 &amp; sh2 &amp; sh1,
+             (np.array([False, False, True]),
+@@ -52,7 +59,17 @@ compound_models = {
+     &#x27;cm7&#x27;: (map2 | p2 &amp; sh1,
+             (np.array([False, True]),
+              np.array([[True, False], [False, True]]))
+-            )
++            ),
++    &#x27;cm8&#x27;: (rot &amp; (sh1 &amp; sh2), cm_4d_expected),
++    &#x27;cm9&#x27;: (rot &amp; sh1 &amp; sh2, cm_4d_expected),
++    &#x27;cm10&#x27;: ((rot &amp; sh1) &amp; sh2, cm_4d_expected),
++    &#x27;cm11&#x27;: (rot &amp; sh1 &amp; (scl1 &amp; scl2),
++             (np.array([False, False, True, True, True]),
++              np.array([[True,  True,  False, False, False],
++                        [True,  True,  False, False, False],
++                        [False, False, True,  False, False],
++                        [False, False, False, True,  False],
++                        [False, False, False, False, True]]))),
+ }
+ 
+ 
+</code></pre>
+</details><details open>
+<summary><strong>codex</strong> — resolved</summary>
+<p>Model: <code>MiniMax-M3</code> &middot;
+   Version: <code>codex-cli 0.137.0</code> &middot;
+   Duration: 245s &middot;
+   Cost: $?</p>
+
+<h4>Test results</h4><table><thead><tr><th>Bucket</th><th>Test</th><th>Pre-flight</th><th>Post-flight</th></tr></thead><tbody><tr><td>Should now pass</td><td><code>astropy/modeling/tests/test_separable.py::test_separable[compound_model6-result6]</code></td><td>failed</td><td>passed</td></tr><tr><td>Should now pass</td><td><code>astropy/modeling/tests/test_separable.py::test_separable[compound_model9-result9]</code></td><td>failed</td><td>passed</td></tr><tr><td>Should still pass</td><td><code>astropy/modeling/tests/test_separable.py::test_coord_matrix</code></td><td>passed</td><td>passed</td></tr><tr><td>Should still pass</td><td><code>astropy/modeling/tests/test_separable.py::test_cdot</code></td><td>passed</td><td>passed</td></tr><tr><td>Should still pass</td><td><code>astropy/modeling/tests/test_separable.py::test_cstack</code></td><td>passed</td><td>passed</td></tr><tr><td>Should still pass</td><td><code>astropy/modeling/tests/test_separable.py::test_arith_oper</code></td><td>passed</td><td>passed</td></tr><tr><td>Should still pass</td><td><code>astropy/modeling/tests/test_separable.py::test_separable[compound_model0-result0]</code></td><td>passed</td><td>passed</td></tr><tr><td>Should still pass</td><td><code>astropy/modeling/tests/test_separable.py::test_separable[compound_model1-result1]</code></td><td>passed</td><td>passed</td></tr><tr><td>Should still pass</td><td><code>astropy/modeling/tests/test_separable.py::test_separable[compound_model2-result2]</code></td><td>passed</td><td>passed</td></tr><tr><td>Should still pass</td><td><code>astropy/modeling/tests/test_separable.py::test_separable[compound_model3-result3]</code></td><td>passed</td><td>passed</td></tr><tr><td>Should still pass</td><td><code>astropy/modeling/tests/test_separable.py::test_separable[compound_model4-result4]</code></td><td>passed</td><td>passed</td></tr><tr><td>Should still pass</td><td><code>astropy/modeling/tests/test_separable.py::test_separable[compound_model5-result5]</code></td><td>passed</td><td>passed</td></tr><tr><td>Should still pass</td><td><code>astropy/modeling/tests/test_separable.py::test_separable[compound_model7-result7]</code></td><td>passed</td><td>passed</td></tr><tr><td>Should still pass</td><td><code>astropy/modeling/tests/test_separable.py::test_separable[compound_model8-result8]</code></td><td>passed</td><td>passed</td></tr><tr><td>Should still pass</td><td><code>astropy/modeling/tests/test_separable.py::test_custom_model_separable</code></td><td>passed</td><td>passed</td></tr></tbody></table>
+<h4>Patch</h4><pre><code class="language-diff">diff --git a/astropy/modeling/separable.py b/astropy/modeling/separable.py
+index a308e27..45bea36 100644
+--- a/astropy/modeling/separable.py
++++ b/astropy/modeling/separable.py
+@@ -242,7 +242,7 @@ def _cstack(left, right):
+         cright = _coord_matrix(right, &#x27;right&#x27;, noutp)
+     else:
+         cright = np.zeros((noutp, right.shape[1]))
+-        cright[-right.shape[0]:, -right.shape[1]:] = 1
++        cright[-right.shape[0]:, -right.shape[1]:] = right
+ 
+     return np.hstack([cleft, cright])
+ 
+diff --git a/astropy/modeling/tests/test_separable.py b/astropy/modeling/tests/test_separable.py
+index 8dfe5c8..024b239 100644
+--- a/astropy/modeling/tests/test_separable.py
++++ b/astropy/modeling/tests/test_separable.py
+@@ -28,6 +28,13 @@ p22 = models.Polynomial2D(2, name=&#x27;p22&#x27;)
+ p1 = models.Polynomial1D(1, name=&#x27;p1&#x27;)
+ 
+ 
++cm_4d_expected = (np.array([False, False, True, True]),
++                  np.array([[True,  True,  False, False],
++                            [True,  True,  False, False],
++                            [False, False, True,  False],
++                            [False, False, False, True]]))
++
++
+ compound_models = {
+     &#x27;cm1&#x27;: (map3 &amp; sh1 | rot &amp; sh1 | sh1 &amp; sh2 &amp; sh1,
+             (np.array([False, False, True]),
+@@ -52,7 +59,17 @@ compound_models = {
+     &#x27;cm7&#x27;: (map2 | p2 &amp; sh1,
+             (np.array([False, True]),
+              np.array([[True, False], [False, True]]))
+-            )
++            ),
++    &#x27;cm8&#x27;: (rot &amp; (sh1 &amp; sh2), cm_4d_expected),
++    &#x27;cm9&#x27;: (rot &amp; sh1 &amp; sh2, cm_4d_expected),
++    &#x27;cm10&#x27;: ((rot &amp; sh1) &amp; sh2, cm_4d_expected),
++    &#x27;cm11&#x27;: (rot &amp; sh1 &amp; (scl1 &amp; scl2),
++             (np.array([False, False, True, True, True]),
++              np.array([[True,  True,  False, False, False],
++                        [True,  True,  False, False, False],
++                        [False, False, True,  False, False],
++                        [False, False, False, True,  False],
++                        [False, False, False, False, True]]))),
+ }
+ 
+ 
+</code></pre>
+</details><details open>
 <summary><strong>codex</strong> — resolved</summary>
 <p>Model: <code>MiniMax-M3</code> &middot;
    Version: <code>codex-cli 0.141.0</code> &middot;

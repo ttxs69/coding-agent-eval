@@ -89,6 +89,129 @@ Matplotlib 3.5.1
 ```
 </pre>
 <details open>
+<summary><strong>claude-code</strong> — resolved</summary>
+<p>Model: <code>glm-5.1</code> &middot;
+   Version: <code>2.1.153 (Claude Code)</code> &middot;
+   Duration: 206s &middot;
+   Cost: $0.59</p>
+
+<h4>Test results</h4><table><thead><tr><th>Bucket</th><th>Test</th><th>Pre-flight</th><th>Post-flight</th></tr></thead><tbody><tr><td>Should now pass</td><td><code>astropy/timeseries/tests/test_sampled.py::test_required_columns</code></td><td>failed</td><td>passed</td></tr><tr><td>Should still pass</td><td><code>astropy/timeseries/tests/test_sampled.py::test_empty_initialization</code></td><td>passed</td><td>passed</td></tr><tr><td>Should still pass</td><td><code>astropy/timeseries/tests/test_sampled.py::test_empty_initialization_invalid</code></td><td>passed</td><td>passed</td></tr><tr><td>Should still pass</td><td><code>astropy/timeseries/tests/test_sampled.py::test_initialize_only_time</code></td><td>passed</td><td>passed</td></tr><tr><td>Should still pass</td><td><code>astropy/timeseries/tests/test_sampled.py::test_initialization_with_data</code></td><td>passed</td><td>passed</td></tr><tr><td>Should still pass</td><td><code>astropy/timeseries/tests/test_sampled.py::test_initialize_only_data</code></td><td>passed</td><td>passed</td></tr><tr><td>Should still pass</td><td><code>astropy/timeseries/tests/test_sampled.py::test_initialization_with_table</code></td><td>passed</td><td>passed</td></tr><tr><td>Should still pass</td><td><code>astropy/timeseries/tests/test_sampled.py::test_initialization_missing_time_delta</code></td><td>passed</td><td>passed</td></tr><tr><td>Should still pass</td><td><code>astropy/timeseries/tests/test_sampled.py::test_initialization_invalid_time_and_time_start</code></td><td>passed</td><td>passed</td></tr><tr><td>Should still pass</td><td><code>astropy/timeseries/tests/test_sampled.py::test_initialization_invalid_time_delta</code></td><td>passed</td><td>passed</td></tr><tr><td>Should still pass</td><td><code>astropy/timeseries/tests/test_sampled.py::test_initialization_with_time_in_data</code></td><td>passed</td><td>passed</td></tr><tr><td>Should still pass</td><td><code>astropy/timeseries/tests/test_sampled.py::test_initialization_n_samples</code></td><td>passed</td><td>passed</td></tr><tr><td>Should still pass</td><td><code>astropy/timeseries/tests/test_sampled.py::test_initialization_length_mismatch</code></td><td>passed</td><td>passed</td></tr><tr><td>Should still pass</td><td><code>astropy/timeseries/tests/test_sampled.py::test_initialization_invalid_both_time_and_time_delta</code></td><td>passed</td><td>passed</td></tr><tr><td>Should still pass</td><td><code>astropy/timeseries/tests/test_sampled.py::test_fold</code></td><td>passed</td><td>passed</td></tr><tr><td>Should still pass</td><td><code>astropy/timeseries/tests/test_sampled.py::test_fold_invalid_options</code></td><td>passed</td><td>passed</td></tr><tr><td>Should still pass</td><td><code>astropy/timeseries/tests/test_sampled.py::test_read_time_missing</code></td><td>passed</td><td>passed</td></tr><tr><td>Should still pass</td><td><code>astropy/timeseries/tests/test_sampled.py::test_read_time_wrong</code></td><td>passed</td><td>passed</td></tr><tr><td>Should still pass</td><td><code>astropy/timeseries/tests/test_sampled.py::test_read</code></td><td>passed</td><td>passed</td></tr><tr><td>Should still pass</td><td><code>astropy/timeseries/tests/test_sampled.py::test_periodogram[BoxLeastSquares]</code></td><td>passed</td><td>passed</td></tr><tr><td>Should still pass</td><td><code>astropy/timeseries/tests/test_sampled.py::test_periodogram[LombScargle]</code></td><td>passed</td><td>passed</td></tr></tbody></table>
+<h4>Patch</h4><pre><code class="language-diff">diff --git a/astropy/timeseries/core.py b/astropy/timeseries/core.py
+index c279f35..2c61461 100644
+--- a/astropy/timeseries/core.py
++++ b/astropy/timeseries/core.py
+@@ -76,9 +76,16 @@ class BaseTimeSeries(QTable):
+ 
+             elif self.colnames[:len(required_columns)] != required_columns:
+ 
+-                raise ValueError(&quot;{} object is invalid - expected &#x27;{}&#x27; &quot;
+-                                 &quot;as the first column{} but found &#x27;{}&#x27;&quot;
+-                                 .format(self.__class__.__name__, required_columns[0], plural, self.colnames[0]))
++                if len(required_columns) == 1:
++                    expected_str = &quot;&#x27;{}&#x27;&quot;.format(required_columns[0])
++                    found_str = &quot;&#x27;{}&#x27;&quot;.format(self.colnames[0])
++                else:
++                    expected_str = &quot;{}&quot;.format(required_columns)
++                    found_str = &quot;{}&quot;.format(self.colnames[:len(required_columns)])
++
++                raise ValueError(&quot;{} object is invalid - expected {} &quot;
++                                 &quot;as the first column{} but found {}&quot;
++                                 .format(self.__class__.__name__, expected_str, plural, found_str))
+ 
+             if (self._required_columns_relax
+                     and self._required_columns == self.colnames[:len(self._required_columns)]):
+diff --git a/astropy/timeseries/tests/test_sampled.py b/astropy/timeseries/tests/test_sampled.py
+index bcc06d9..241d711 100644
+--- a/astropy/timeseries/tests/test_sampled.py
++++ b/astropy/timeseries/tests/test_sampled.py
+@@ -395,6 +395,14 @@ def test_required_columns():
+     assert exc.value.args[0] == (&quot;TimeSeries object is invalid - expected &quot;
+                                  &quot;&#x27;time&#x27; as the first column but found &#x27;banana&#x27;&quot;)
+ 
++    # https://github.com/astropy/astropy/issues/13009
++    ts_2cols_required = ts.copy()
++    ts_2cols_required._required_columns = [&#x27;time&#x27;, &#x27;a&#x27;]
++    with pytest.raises(ValueError) as exc:
++        ts_2cols_required.remove_column(&#x27;a&#x27;)
++    assert exc.value.args[0] == (&quot;TimeSeries object is invalid - expected &quot;
++                                 &quot;[&#x27;time&#x27;, &#x27;a&#x27;] as the first columns but found [&#x27;time&#x27;, &#x27;b&#x27;]&quot;)
++
+ 
+ @pytest.mark.parametrize(&#x27;cls&#x27;, [BoxLeastSquares, LombScargle])
+ def test_periodogram(cls):
+</code></pre>
+</details><details open>
+<summary><strong>codex</strong> — failed</summary>
+<p>Model: <code>MiniMax-M3</code> &middot;
+   Version: <code>codex-cli 0.137.0</code> &middot;
+   Duration: 269s &middot;
+   Cost: $?</p>
+
+<h4>Test results</h4><table><thead><tr><th>Bucket</th><th>Test</th><th>Pre-flight</th><th>Post-flight</th></tr></thead><tbody><tr><td>Should now pass</td><td><code>astropy/timeseries/tests/test_sampled.py::test_required_columns</code></td><td>failed</td><td>failed</td></tr><tr><td>Should still pass</td><td><code>astropy/timeseries/tests/test_sampled.py::test_empty_initialization</code></td><td>passed</td><td>passed</td></tr><tr><td>Should still pass</td><td><code>astropy/timeseries/tests/test_sampled.py::test_empty_initialization_invalid</code></td><td>passed</td><td>failed</td></tr><tr><td>Should still pass</td><td><code>astropy/timeseries/tests/test_sampled.py::test_initialize_only_time</code></td><td>passed</td><td>passed</td></tr><tr><td>Should still pass</td><td><code>astropy/timeseries/tests/test_sampled.py::test_initialization_with_data</code></td><td>passed</td><td>passed</td></tr><tr><td>Should still pass</td><td><code>astropy/timeseries/tests/test_sampled.py::test_initialize_only_data</code></td><td>passed</td><td>passed</td></tr><tr><td>Should still pass</td><td><code>astropy/timeseries/tests/test_sampled.py::test_initialization_with_table</code></td><td>passed</td><td>passed</td></tr><tr><td>Should still pass</td><td><code>astropy/timeseries/tests/test_sampled.py::test_initialization_missing_time_delta</code></td><td>passed</td><td>passed</td></tr><tr><td>Should still pass</td><td><code>astropy/timeseries/tests/test_sampled.py::test_initialization_invalid_time_and_time_start</code></td><td>passed</td><td>passed</td></tr><tr><td>Should still pass</td><td><code>astropy/timeseries/tests/test_sampled.py::test_initialization_invalid_time_delta</code></td><td>passed</td><td>passed</td></tr><tr><td>Should still pass</td><td><code>astropy/timeseries/tests/test_sampled.py::test_initialization_with_time_in_data</code></td><td>passed</td><td>passed</td></tr><tr><td>Should still pass</td><td><code>astropy/timeseries/tests/test_sampled.py::test_initialization_n_samples</code></td><td>passed</td><td>passed</td></tr><tr><td>Should still pass</td><td><code>astropy/timeseries/tests/test_sampled.py::test_initialization_length_mismatch</code></td><td>passed</td><td>passed</td></tr><tr><td>Should still pass</td><td><code>astropy/timeseries/tests/test_sampled.py::test_initialization_invalid_both_time_and_time_delta</code></td><td>passed</td><td>passed</td></tr><tr><td>Should still pass</td><td><code>astropy/timeseries/tests/test_sampled.py::test_fold</code></td><td>passed</td><td>passed</td></tr><tr><td>Should still pass</td><td><code>astropy/timeseries/tests/test_sampled.py::test_fold_invalid_options</code></td><td>passed</td><td>passed</td></tr><tr><td>Should still pass</td><td><code>astropy/timeseries/tests/test_sampled.py::test_read_time_missing</code></td><td>passed</td><td>passed</td></tr><tr><td>Should still pass</td><td><code>astropy/timeseries/tests/test_sampled.py::test_read_time_wrong</code></td><td>passed</td><td>passed</td></tr><tr><td>Should still pass</td><td><code>astropy/timeseries/tests/test_sampled.py::test_read</code></td><td>passed</td><td>passed</td></tr><tr><td>Should still pass</td><td><code>astropy/timeseries/tests/test_sampled.py::test_periodogram[BoxLeastSquares]</code></td><td>passed</td><td>passed</td></tr><tr><td>Should still pass</td><td><code>astropy/timeseries/tests/test_sampled.py::test_periodogram[LombScargle]</code></td><td>passed</td><td>passed</td></tr></tbody></table>
+<h4>Patch</h4><pre><code class="language-diff">diff --git a/astropy/timeseries/core.py b/astropy/timeseries/core.py
+index c279f35..0b0eb87 100644
+--- a/astropy/timeseries/core.py
++++ b/astropy/timeseries/core.py
+@@ -74,14 +74,30 @@ class BaseTimeSeries(QTable):
+                                  &quot;as the first column{} but time series has no columns&quot;
+                                  .format(self.__class__.__name__, required_columns[0], plural))
+ 
+-            elif self.colnames[:len(required_columns)] != required_columns:
+-
+-                raise ValueError(&quot;{} object is invalid - expected &#x27;{}&#x27; &quot;
+-                                 &quot;as the first column{} but found &#x27;{}&#x27;&quot;
+-                                 .format(self.__class__.__name__, required_columns[0], plural, self.colnames[0]))
+-
+-            if (self._required_columns_relax
+-                    and self._required_columns == self.colnames[:len(self._required_columns)]):
++        elif self.colnames[:len(required_columns)] != required_columns:
++
++            # Find the first position at which the columns do not match. If
++            # the first column is wrong, report it as a wrong-first-column
++            # error. Otherwise, the table is missing a required column (or
++            # has a different column where one was expected) and we list the
++            # required vs. actual columns so the user can tell which one is
++            # missing.
++            for index, required in enumerate(required_columns):
++                if index &gt;= len(self.colnames) or self.colnames[index] != required:
++                    if index == 0:
++                        raise ValueError(&quot;{} object is invalid - expected &#x27;{}&#x27; &quot;
++                                         &quot;as the first column{} but found &#x27;{}&#x27;&quot;
++                                         .format(self.__class__.__name__,
++                                                 required_columns[0], plural,
++                                                 self.colnames[0]))
++                    raise ValueError(&quot;{} object is invalid - expected {} &quot;
++                                     &quot;as the first column{} but found {}&quot;
++                                     .format(self.__class__.__name__,
++                                             required_columns, plural,
++                                             self.colnames[:len(required_columns)]))
++
++        if (self._required_columns_relax
++                and self._required_columns == self.colnames[:len(self._required_columns)]):
+                 self._required_columns_relax = False
+ 
+     @contextmanager
+diff --git a/astropy/timeseries/tests/test_sampled.py b/astropy/timeseries/tests/test_sampled.py
+index bcc06d9..241d711 100644
+--- a/astropy/timeseries/tests/test_sampled.py
++++ b/astropy/timeseries/tests/test_sampled.py
+@@ -395,6 +395,14 @@ def test_required_columns():
+     assert exc.value.args[0] == (&quot;TimeSeries object is invalid - expected &quot;
+                                  &quot;&#x27;time&#x27; as the first column but found &#x27;banana&#x27;&quot;)
+ 
++    # https://github.com/astropy/astropy/issues/13009
++    ts_2cols_required = ts.copy()
++    ts_2cols_required._required_columns = [&#x27;time&#x27;, &#x27;a&#x27;]
++    with pytest.raises(ValueError) as exc:
++        ts_2cols_required.remove_column(&#x27;a&#x27;)
++    assert exc.value.args[0] == (&quot;TimeSeries object is invalid - expected &quot;
++                                 &quot;[&#x27;time&#x27;, &#x27;a&#x27;] as the first columns but found [&#x27;time&#x27;, &#x27;b&#x27;]&quot;)
++
+ 
+ @pytest.mark.parametrize(&#x27;cls&#x27;, [BoxLeastSquares, LombScargle])
+ def test_periodogram(cls):
+</code></pre>
+</details><details open>
 <summary><strong>codex</strong> — failed</summary>
 <p>Model: <code>MiniMax-M3</code> &middot;
    Version: <code>codex-cli 0.141.0</code> &middot;
