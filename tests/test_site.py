@@ -260,3 +260,54 @@ def test_build_site_include_archive_cleans_up_temp_dir(monkeypatch, tmp_path):
     assert not merged_dirs[0].exists(), (
         f"temp merged dir {merged_dirs[0]} should be cleaned up after build"
     )
+
+
+def test_fmt_pass_rate_zero_attempts_renders_just_percent():
+    """n=0 must NOT show 'CI 0-0%' (that's noisy and misleading). The
+    renderer short-circuits to just '0%' when n=0, since the caller
+    should detect n_attempted==0 separately."""
+    from cae.site import _fmt_pass_rate
+    assert _fmt_pass_rate({"pass_rate": 0.0, "n_attempted": 0,
+                            "pass_rate_ci_low": 0.0, "pass_rate_ci_high": 0.0}) == "0%"
+
+
+def test_fmt_pass_rate_basic_2_of_3():
+    """2/3 resolved at 95% Wilson CI is (0.21, 0.94) — renders as
+    '67% (CI 21-94%)'. Locks the integer-rounding format so a future
+    change to % formatting (e.g. one decimal) breaks the test."""
+    from cae.site import _fmt_pass_rate
+    out = _fmt_pass_rate({"pass_rate": 2/3, "n_attempted": 3,
+                           "pass_rate_ci_low": 0.2077, "pass_rate_ci_high": 0.9385})
+    assert out == "67% (CI 21–94%)", f"got {out!r}"
+
+
+def test_fmt_pass_rate_missing_ci_fields_falls_back():
+    """If the new pass_rate_ci_low/high fields are missing (e.g. row
+    came from an older build without the Wilson fields), the renderer
+    must not crash — fall back to the bare percentage."""
+    from cae.site import _fmt_pass_rate
+    assert _fmt_pass_rate({"pass_rate": 0.5, "n_attempted": 4}) == "50%"
+
+
+def test_aggregate_results_round_trips_through_json_with_new_fields(tmp_path):
+    """Lock the data/results.json schema: pass_rate_ci_low/high must
+    survive a json.dumps/loads round-trip. Without this, a future
+    refactor that drops the fields would silently break the public
+    leaderboard JSON contract."""
+    import json
+    results = tmp_path / "results"
+    results.mkdir()
+    (results / "r.json").write_text(json.dumps({
+        "agent": "claude-code", "model": "m", "agent_version": "1.0",
+        "task_id": "t", "status": "resolved", "started_at": "2026-06-27T00:00:00Z",
+        "duration_sec": 100, "usage": {"cost_usd": 0.1},
+    }))
+    from cae.metrics import aggregate_results
+    rows = aggregate_results(results)
+    # Round-trip through json (the path data/results.json takes).
+    payload = json.loads(json.dumps(rows, default=str))
+    assert "pass_rate_ci_low" in payload[0]
+    assert "pass_rate_ci_high" in payload[0]
+    # The CI values should be in [0, 1] (Wilson is well-defined).
+    assert 0.0 <= payload[0]["pass_rate_ci_low"] <= 1.0
+    assert 0.0 <= payload[0]["pass_rate_ci_high"] <= 1.0

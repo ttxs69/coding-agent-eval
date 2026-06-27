@@ -77,10 +77,11 @@ def _fmt_tokens_with_cache(r: dict) -> str:
 def _fmt_pass_rate(r: dict) -> str:
     """Render pass rate as point estimate with 95% CI when n > 0.
 
-    Examples:
-      n=10, 5/5 resolved → "100% (CI 60–100%)"
-      n=3, 2/3 resolved → "67% (CI 20–94%)"
-      n=0 → "0%"
+    Examples (computed with the standard Wilson score interval):
+      n=3, 2/3 resolved → "67% (CI 21–94%)"
+      n=3, 3/3 resolved → "100% (CI 44–100%)"  (CI hits upper bound at 1.0
+                                                       when all attempts succeeded)
+      n=0 → "0%"  (no CI shown — caller detects n_attempted==0 separately)
 
     For tiny samples (the leaderboard's normal case) the CI is
     dramatically wider than the point estimate suggests — showing it
