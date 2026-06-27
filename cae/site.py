@@ -74,11 +74,34 @@ def _fmt_tokens_with_cache(r: dict) -> str:
     return _fmt_int(in_t + out_t)
 
 
+def _fmt_pass_rate(r: dict) -> str:
+    """Render pass rate as point estimate with 95% CI when n > 0.
+
+    Examples:
+      n=10, 5/5 resolved → "100% (CI 60–100%)"
+      n=3, 2/3 resolved → "67% (CI 20–94%)"
+      n=0 → "0%"
+
+    For tiny samples (the leaderboard's normal case) the CI is
+    dramatically wider than the point estimate suggests — showing it
+    prevents "67% looks like fact" misreadings of a 3-task sample.
+    """
+    n = r.get("n_attempted", 0)
+    pct = r["pass_rate"] * 100
+    if n == 0:
+        return f"{pct:.0f}%"
+    low = r.get("pass_rate_ci_low")
+    high = r.get("pass_rate_ci_high")
+    if low is None or high is None:
+        return f"{pct:.0f}%"
+    return f"{pct:.0f}% (CI {low*100:.0f}–{high*100:.0f}%)"
+
+
 def _index_html(rows: list[dict], harness_sha: str) -> str:
     rows_html = "\n".join(
         f"<tr><td>{html.escape(r['agent'])}</td>"
         f"<td>{html.escape(str(r['model'] or ''))}</td>"
-        f"<td>{r['pass_rate']*100:.0f}%</td>"
+        f"<td>{_fmt_pass_rate(r)}</td>"
         f"<td>{r['n_attempted']}</td>"
         f"<td>{r.get('n_skipped_harness', 0)}</td>"
         f"<td>{_fmt_cost(r['median_cost_usd'])}</td>"

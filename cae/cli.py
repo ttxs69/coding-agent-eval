@@ -467,16 +467,17 @@ def _publish_site(out_dir: Path) -> int:
 def cmd_report(args: argparse.Namespace) -> int:
     from cae.metrics import aggregate_results
     from cae.render_table import render_table
+    from cae.site import _fmt_pass_rate
     rows = aggregate_results(Path(args.results_dir))
     if args.format == "table":
-        headers = ["AGENT", "MODEL", "PASS RATE", "N", "SKIPPED", "MEDIAN COST", "MEDIAN DUR (s)", "LAST RUN"]
+        headers = ["AGENT", "MODEL", "PASS RATE (95% CI)", "N", "SKIPPED", "MEDIAN COST", "MEDIAN DUR (s)", "LAST RUN"]
         def fmt_cost(v):
             return f"${v:.2f}" if v is not None else "$?"
         def fmt_dur(v):
             return f"{v:.0f}" if v is not None else "?"
         out_rows = [
             [r["agent"], str(r["model"] or ""),
-             f"{r['pass_rate']*100:.0f}%", str(r["n_attempted"]),
+             _fmt_pass_rate(r), str(r["n_attempted"]),
              str(r.get("n_skipped_harness", 0)),
              fmt_cost(r["median_cost_usd"]), fmt_dur(r["median_duration_sec"]),
              r["last_run"]]
